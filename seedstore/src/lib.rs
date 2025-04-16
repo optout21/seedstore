@@ -70,7 +70,9 @@ impl SeedStore {
         })
     }
 
-    pub fn write_to_file(
+    /// Write out secret content to a file.
+    /// Use it through [`SeedStoreCreator`]
+    fn write_to_file(
         &self,
         path_for_secret_file: &str,
         encryption_password: &EncryptionPassword,
@@ -186,6 +188,15 @@ impl SeedStoreCreator {
         let nonsecret_data = vec![network, entropy_checksum];
         let secretstore = SecretStoreCreator::new_from_data(nonsecret_data, entropy)?;
         SeedStore::new_from_secretstore(secretstore)
+    }
+
+    /// Write out secret content to a file.
+    pub fn write_to_file(
+        seedstore: &SeedStore,
+        path_for_secret_file: &str,
+        encryption_password: &EncryptionPassword,
+    ) -> Result<(), String> {
+        seedstore.write_to_file(path_for_secret_file, encryption_password)
     }
 }
 

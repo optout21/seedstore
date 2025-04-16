@@ -94,7 +94,9 @@ impl SecretStore {
         Ok(res)
     }
 
-    pub fn write_to_file(
+    /// Write out secret content to a file.
+    /// Use it through [`SecretStoreCreator`]
+    fn write_to_file(
         &self,
         path_for_secret_file: &str,
         encryption_password: &EncryptionPassword,
@@ -166,6 +168,15 @@ impl SecretStoreCreator {
             nonsecret_data,
             ephemeral_encryption_key,
         })
+    }
+
+    /// Write out secret content to a file.
+    pub fn write_to_file(
+        secretstore: &SecretStore,
+        path_for_secret_file: &str,
+        encryption_password: &EncryptionPassword,
+    ) -> Result<(), String> {
+        secretstore.write_to_file(path_for_secret_file, encryption_password)
     }
 }
 
