@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 bip39 = "2.1.0"
 bitcoin = "0.32.5"
-secretstore = { path = "../secretstore" }
+secretstore = "0.1.2"
 
 [dev-dependencies]
 hex-conservative = "0.3.0"
