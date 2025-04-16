@@ -4,11 +4,9 @@ mod test_lib;
 use bip39::Mnemonic;
 use bitcoin::bip32::{ChildNumber, DerivationPath, Xpriv, Xpub};
 use bitcoin::key::{Keypair, Secp256k1};
-use bitcoin::secp256k1::{All, PublicKey};
+use bitcoin::secp256k1::{All, PublicKey, SecretKey};
 use bitcoin::{Network, NetworkKind};
-#[cfg(test)]
-use secretstore::EncryptionPassword;
-use secretstore::{SecretStore, SecretStoreCreator};
+use secretstore::{EncryptionPassword, SecretStore, SecretStoreCreator};
 use std::str::FromStr;
 
 /// Store a secret data in an encrypred file.
@@ -72,8 +70,7 @@ impl SeedStore {
         })
     }
 
-    #[cfg(test)]
-    fn write_to_file(
+    pub fn write_to_file(
         &self,
         path_for_secret_file: &str,
         encryption_password: &EncryptionPassword,
@@ -106,11 +103,19 @@ impl SeedStore {
         Ok(xpub)
     }
 
-    pub fn get_public_key(&self, index: u32) -> Result<PublicKey, String> {
-        let xpub = self
+    pub fn get_child_public_key(&self, index: u32) -> Result<PublicKey, String> {
+        let pubkey = self
             .secretstore
-            .processed_secret_data(|entropy| self.get_child_public_key(entropy, index))?;
-        Ok(xpub)
+            .processed_secret_data(|entropy| self.get_child_public_key_intern(entropy, index))?;
+        Ok(pubkey)
+    }
+
+    /// Use with caution!
+    pub fn get_child_private_key(&self, index: u32) -> Result<SecretKey, String> {
+        let privkey = self
+            .secretstore
+            .processed_secret_data(|entropy| self.get_child_private_key_intern(entropy, index))?;
+        Ok(privkey)
     }
 
     fn default_account_derivation_path(&self) -> String {
@@ -144,7 +149,7 @@ impl SeedStore {
         Ok(xpub_level_3)
     }
 
-    fn get_child_keypair(&self, entropy: &Vec<u8>, index: u32) -> Result<Keypair, String> {
+    fn get_child_keypair_intern(&self, entropy: &Vec<u8>, index: u32) -> Result<Keypair, String> {
         let xpriv = self.xpriv_from_entropy(entropy)?;
         // derive
         let index_4 = ChildNumber::from_normal_idx(0).unwrap();
@@ -156,9 +161,22 @@ impl SeedStore {
         Ok(keypair)
     }
 
-    fn get_child_public_key(&self, entropy: &Vec<u8>, index: u32) -> Result<PublicKey, String> {
-        let keypair = self.get_child_keypair(entropy, index)?;
+    pub fn get_child_public_key_intern(
+        &self,
+        entropy: &Vec<u8>,
+        index: u32,
+    ) -> Result<PublicKey, String> {
+        let keypair = self.get_child_keypair_intern(entropy, index)?;
         Ok(keypair.public_key())
+    }
+
+    fn get_child_private_key_intern(
+        &self,
+        entropy: &Vec<u8>,
+        index: u32,
+    ) -> Result<SecretKey, String> {
+        let keypair = self.get_child_keypair_intern(entropy, index)?;
+        Ok(keypair.secret_key())
     }
 }
 

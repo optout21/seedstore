@@ -20,11 +20,11 @@ fn create_from_data() {
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
     assert_eq!(
-        store.get_child_public_key(&entropy, 0).unwrap().to_string(),
+        store.get_child_public_key(0).unwrap().to_string(),
         "032814221178177cb5ac81ae0ffa3be2e3c936503d6927050af739a41311f3821e"
     );
     assert_eq!(
-        store.get_child_public_key(&entropy, 1).unwrap().to_string(),
+        store.get_child_public_key(1).unwrap().to_string(),
         "033107250a6f0a7acf9c33436c43310467d69c858f1cf8c7a5ddc5283ae53d44c8"
     );
 }
