@@ -8,7 +8,7 @@ const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
 const NONSECRET_DATA1: &str = "010203";
 const SECRET_DATA1: &str = "0102030405060708";
-const PAYLOAD1: &str = "0301020308db52a1e576359099982485f3";
+const PAYLOAD1: &str = "530301020308db52a1e5763590996e860e53";
 
 fn create_store_from_data(nonsecret_data: Vec<u8>, secret_data: &Vec<u8>) -> SecretStore {
     SecretStoreCreator::new_from_data(nonsecret_data, secret_data).unwrap()
@@ -104,7 +104,7 @@ fn create_from_payload_different_pw() {
             .assemble_payload(&password)
             .unwrap()
             .to_lower_hex_string(),
-        "0301020308dd20ba24a2f30ebb2b077fd2"
+        "530301020308dd20ba24a2f30ebb317b987a"
     );
 }
 
@@ -154,7 +154,10 @@ fn neg_create_from_payload_with_wrong_checksum() {
     payload[payload_len - 1] -= 1;
 
     let res = SecretStore::new_from_payload(&payload, &password);
-    assert_eq!(res.err().unwrap(), "Checksum mismatch!");
+    assert_eq!(
+        res.err().unwrap(),
+        "Checksum mismatch, check the secret file!"
+    );
 }
 
 fn get_temp_file_name() -> String {

@@ -7,7 +7,7 @@ use std::fs;
 const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
 const ENTROPY_OIL12: &str = "99d33a674ce99d33a674ce99d33a674c";
-const PAYLOAD1: &str = "02000e10438398863fda0aa2abd08a8d02b18b1d20a38850";
+const PAYLOAD1: &str = "5302000e10438398863fda0aa2abd08a8d02b18b1de92191df";
 const XPUB1: &str = "xpub6CDDB17Xj7pDDWedpLsED1JbPPQmyuapHmAzQEEs2P57hciCjwQ3ov7TfGsTZftAM2gVdPzE55L6gUvHguwWjY82518zw1Z3VbDeWgx3Jqs";
 const XPUB2: &str = "tpubDCRo9GmRAvEWANJ5iSfMEqPoq3uYvjBPAAjrDj5iQMxAq7DCs5orw7m9xJes8hWYAwKuH3T63WrKfzzw7g9ucbjq4LUu5cgCLUPMN7gUkrL";
 
@@ -30,7 +30,7 @@ fn create_from_data() {
 }
 
 #[test]
-fn create_from_data_net3() {
+fn create_from_data_net_3() {
     let network = 3u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
     let store = SeedStoreCreator::new_from_data(network, &entropy).unwrap();
@@ -98,5 +98,8 @@ fn neg_read_from_file_diff_pw_invalid_checksum() {
 
     let password = PASSWORD2.to_owned();
     let res = SeedStore::new_from_encrypted_file(&temp_file, &password);
-    debug_assert_eq!(res.err().unwrap(), "Invalid checksum, 14 vs 12");
+    debug_assert_eq!(
+        res.err().unwrap(),
+        "Checksum mismatch (14 vs 12), check the password and the secret file!"
+    );
 }

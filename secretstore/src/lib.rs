@@ -5,6 +5,7 @@ use hex_conservative::prelude::*;
 use rand::Rng;
 use std::fs;
 
+const MAGIC_BYTE: u8 = 'S' as u8; // dec 83 hex 53
 const SECRET_DATA_MAXLEN: usize = 256;
 const SECRET_DATA_MINLEN: usize = 1;
 const NONSECRET_DATA_MAXLEN: usize = 255;
@@ -180,6 +181,16 @@ fn read_payload_from_file(path_for_secret_file: &str) -> Result<Vec<u8>, String>
 
 fn parse_payload(payload: &Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), String> {
     let mut pos: usize = 0;
+    let magic_byte = *payload
+        .get(pos)
+        .ok_or(format!("File content is too short, {}", pos))?;
+    if magic_byte != MAGIC_BYTE {
+        return Err(format!(
+            "Wrong magic byte ({}), check the secret file!",
+            magic_byte
+        ));
+    }
+    pos += 1;
     let unencrypted_len = *payload
         .get(pos)
         .ok_or(format!("File content is too short, {}", pos))? as usize;
@@ -217,7 +228,7 @@ fn parse_payload(payload: &Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), String> {
     // Compute and check checksum
     let checksum_computed = checksum_of_payload(&payload[0..pos]);
     if checksum_parsed != checksum_computed {
-        return Err(format!("Checksum mismatch!"));
+        return Err(format!("Checksum mismatch, check the secret file!"));
     }
     pos += CHECKSUM_LEN;
 
@@ -238,6 +249,7 @@ fn assemble_payload(
     encrypted_secre_data: &Vec<u8>,
 ) -> Result<Vec<u8>, String> {
     let mut o = Vec::new();
+    o.push(MAGIC_BYTE);
     o.push(nonsecret_data.len() as u8); // TODO check
     o.extend(nonsecret_data);
     o.push(encrypted_secre_data.len() as u8); // TODO check

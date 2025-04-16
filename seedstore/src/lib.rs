@@ -61,7 +61,7 @@ impl SeedStore {
         let entropy_checksum_provided = nonsecret_data[1];
         if entropy_checksum_computed != entropy_checksum_provided {
             return Err(format!(
-                "Invalid checksum, {} vs {}",
+                "Checksum mismatch ({} vs {}), check the password and the secret file!",
                 entropy_checksum_provided, entropy_checksum_computed
             ));
         }
