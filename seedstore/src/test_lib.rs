@@ -7,7 +7,7 @@ use std::fs;
 const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
 const ENTROPY_OIL12: &str = "99d33a674ce99d33a674ce99d33a674c";
-const PAYLOAD1: &str = "5302000e10438398863fda0aa2abd08a8d02b18b1de92191df";
+const PAYLOAD1: &str = "5302000e0f438398863fda0aa2abd08a8d02b18b1d6142a3bc";
 const XPUB1: &str = "xpub6CDDB17Xj7pDDWedpLsED1JbPPQmyuapHmAzQEEs2P57hciCjwQ3ov7TfGsTZftAM2gVdPzE55L6gUvHguwWjY82518zw1Z3VbDeWgx3Jqs";
 const XPUB2: &str = "tpubDCRo9GmRAvEWANJ5iSfMEqPoq3uYvjBPAAjrDj5iQMxAq7DCs5orw7m9xJes8hWYAwKuH3T63WrKfzzw7g9ucbjq4LUu5cgCLUPMN7gUkrL";
 
@@ -69,8 +69,10 @@ fn write_to_file() {
     let _res = store.write_to_file(&temp_file, &password).unwrap();
 
     // check the file
-    let contents = fs::read(temp_file).unwrap();
+    let contents = fs::read(&temp_file).unwrap();
     assert_eq!(contents.to_lower_hex_string(), PAYLOAD1);
+
+    let _res = fs::remove_file(&temp_file);
 }
 
 #[test]
@@ -86,6 +88,8 @@ fn read_from_file() {
 
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
+
+    let _res = fs::remove_file(&temp_file);
 }
 
 #[test]
@@ -102,4 +106,6 @@ fn neg_read_from_file_diff_pw_invalid_checksum() {
         res.err().unwrap(),
         "Checksum mismatch (14 vs 12), check the password and the secret file!"
     );
+
+    let _res = fs::remove_file(&temp_file);
 }

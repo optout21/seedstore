@@ -9,6 +9,7 @@ const MAGIC_BYTE: u8 = 'S' as u8; // dec 83 hex 53
 const SECRET_DATA_MAXLEN: usize = 256;
 const SECRET_DATA_MINLEN: usize = 1;
 const NONSECRET_DATA_MAXLEN: usize = 255;
+const BYTE_MAX: u8 = 255;
 const ENCRYPTION_KEY_LEN: usize = 32;
 const CHECKSUM_LEN: usize = 4;
 const ENCRYPT_KEY_HASH_MESSAGE: &str = "Secret Storage Key Prefix - could be anything";
@@ -204,9 +205,10 @@ fn parse_payload(payload: &Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), String> {
     }
     let nonsecret_data = payload[pos..pos + unencrypted_len].to_vec();
     pos += unencrypted_len;
-    let encrypted_len = *payload
+    let encrypted_len_m1 = *payload
         .get(pos)
-        .ok_or(format!("File content is too short, {}", pos))? as usize;
+        .ok_or(format!("File content is too short, {}", pos))?;
+    let encrypted_len = encrypted_len_m1 as usize + 1;
     pos += 1;
     if payload.len() < pos + encrypted_len {
         return Err(format!(
@@ -246,14 +248,38 @@ fn parse_payload(payload: &Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), String> {
 
 fn assemble_payload(
     nonsecret_data: &Vec<u8>,
-    encrypted_secre_data: &Vec<u8>,
+    encrypted_secret_data: &Vec<u8>,
 ) -> Result<Vec<u8>, String> {
     let mut o = Vec::new();
     o.push(MAGIC_BYTE);
-    o.push(nonsecret_data.len() as u8); // TODO check
+    let nonsecret_len = nonsecret_data.len();
+    if nonsecret_len > NONSECRET_DATA_MAXLEN {
+        return Err(format!(
+            "Nonsecret data too long ({} vs {})",
+            nonsecret_len, NONSECRET_DATA_MAXLEN
+        ));
+    }
+    debug_assert!(nonsecret_len <= BYTE_MAX as usize);
+    o.push(nonsecret_len as u8);
     o.extend(nonsecret_data);
-    o.push(encrypted_secre_data.len() as u8); // TODO check
-    o.extend(encrypted_secre_data);
+    let encrypted_secret_data_len = encrypted_secret_data.len();
+    if encrypted_secret_data_len < 1 {
+        return Err(format!(
+            "Secret data too short ({} vs {})",
+            encrypted_secret_data_len, 1
+        ));
+    }
+    if encrypted_secret_data_len > SECRET_DATA_MAXLEN {
+        return Err(format!(
+            "Secret data too long ({} vs {})",
+            encrypted_secret_data_len, SECRET_DATA_MAXLEN
+        ));
+    }
+    debug_assert!(encrypted_secret_data_len >= 1 && encrypted_secret_data_len <= 256);
+    let encrypted_secret_data_len_m1 = (encrypted_secret_data_len - 1) as usize;
+    debug_assert!(encrypted_secret_data_len_m1 <= BYTE_MAX as usize);
+    o.push(encrypted_secret_data_len_m1 as u8);
+    o.extend(encrypted_secret_data);
     // compute and add checksum
     let checksum = checksum_of_payload(&o);
     o.extend(&checksum);
