@@ -1,0 +1,13 @@
+[package]
+name = "seedstore"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bip39 = "2.1.0"
+bitcoin = "0.32.5"
+secretstore = { path = "../secretstore" }
+
+[dev-dependencies]
+hex-conservative = "0.3.0"
+rand = "0.9.0"
