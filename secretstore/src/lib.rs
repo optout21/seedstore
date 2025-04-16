@@ -101,6 +101,19 @@ impl SecretStore {
         path_for_secret_file: &str,
         encryption_password: &EncryptionPassword,
     ) -> Result<(), String> {
+        let file_exists = fs::exists(path_for_secret_file).map_err(|e| {
+            format!(
+                "Could not check existence of secret file ({} {})",
+                path_for_secret_file,
+                e.to_string()
+            )
+        })?;
+        if file_exists {
+            return Err(format!(
+                "A secret file already exisits, refusing to overwrite ({})",
+                path_for_secret_file
+            ));
+        }
         let payload = self.assemble_payload(encryption_password)?;
         let _res = fs::write(path_for_secret_file, payload).map_err(|e| {
             format!(
