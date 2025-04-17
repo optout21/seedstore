@@ -29,7 +29,6 @@ Steps to mitigate the risks:
 - add version
 - use zeroize
 - for sha256 use bitcon_hashes crate instead of sha256
-- document format
 - use and store random salt (for encryption)
 - use diffrerent encryption (chacha20)
 - direct access to secrets available only in separate feature
@@ -57,3 +56,6 @@ cargo test
 ```
 
 _MSRV_: Rust 1.81 (due to `fs::exists`)
+
+## Data Format
+Secret file data format documentation: [Data_Format.md](Data_Format.md)
