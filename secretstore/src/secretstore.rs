@@ -1,3 +1,4 @@
+use crate::encrypt_xor::{EncryptionKey, Encryptor, XorEncryptor};
 use hex_conservative::prelude::*;
 use rand_core::{OsRng, RngCore};
 use std::fs;
@@ -7,11 +8,8 @@ const SECRET_DATA_MAXLEN: usize = 256;
 const SECRET_DATA_MINLEN: usize = 1;
 const NONSECRET_DATA_MAXLEN: usize = 255;
 const BYTE_MAX: u8 = 255;
-const ENCRYPTION_KEY_LEN: usize = 32;
+// const ENCRYPTION_KEY_LEN: usize = 32;
 const CHECKSUM_LEN: usize = 4;
-const ENCRYPT_KEY_HASH_MESSAGE: &str = "Secret Storage Key Prefix - could be anything";
-
-type EncryptionKey = [u8; ENCRYPTION_KEY_LEN];
 
 /// Store a secret data in an encrypred file.
 /// Also store some nonsecret data.
@@ -297,32 +295,13 @@ fn assemble_payload(
     Ok(o)
 }
 
-fn decrypt_xor(data: &mut Vec<u8>, key: &EncryptionKey) -> Result<(), String> {
-    for i in 0..data.len() {
-        data[i] = data[i] ^ key[i % ENCRYPTION_KEY_LEN];
-    }
-    Ok(())
-}
-
-fn encryption_key_from_password(encryption_password: &str) -> Result<EncryptionKey, String> {
-    let message = ENCRYPT_KEY_HASH_MESSAGE.to_string() + encryption_password;
-    let encryption_key_str = sha256::digest(message);
-    let encryption_key = EncryptionKey::from_hex(&encryption_key_str).map_err(|e| {
-        format!(
-            "Internal error: Could not parse hex hash digest string, {}",
-            e
-        )
-    })?;
-    Ok(encryption_key)
-}
-
 /// Descramble scrambled secret, in-place.
 /// Caution: decrypted secret is made available
 fn descramble_secret(
     encrypted: &mut Vec<u8>,
     scrambling_key: &EncryptionKey,
 ) -> Result<(), String> {
-    let _res = decrypt_xor(encrypted, &scrambling_key)?;
+    let _res = XorEncryptor::decrypt_with_key(encrypted, &scrambling_key)?;
     Ok(())
 }
 
@@ -332,7 +311,7 @@ fn scramble_secret(
     scrambling_key: &EncryptionKey,
 ) -> Result<(), String> {
     debug_assert!(unencrypted.len() <= SECRET_DATA_MAXLEN);
-    let _res = decrypt_xor(unencrypted, &scrambling_key)?;
+    let _res = XorEncryptor::encrypt_with_key(unencrypted, &scrambling_key)?;
     Ok(())
 }
 
@@ -344,8 +323,7 @@ fn scramble_encrypted_secret_data(
     scrambling_key: &EncryptionKey,
 ) -> Result<(), String> {
     debug_assert!(encrypted.len() <= SECRET_DATA_MAXLEN);
-    let decryption_key = encryption_key_from_password(decryption_password)?;
-    let _res = decrypt_xor(encrypted, &decryption_key)?;
+    let _res = XorEncryptor::decrypt(encrypted, decryption_password, &Vec::new())?;
     let _res = scramble_secret(encrypted, scrambling_key)?;
     Ok(())
 }
@@ -357,9 +335,8 @@ fn encrypt_scrambled_secret_data(
     scrambling_key: &EncryptionKey,
     encryption_password: &str,
 ) -> Result<(), String> {
-    let encryption_key = encryption_key_from_password(encryption_password)?;
     let _res = descramble_secret(scrambled, scrambling_key)?;
-    let _res = decrypt_xor(scrambled, &encryption_key)?;
+    let _res = XorEncryptor::encrypt(scrambled, encryption_password, &Vec::new());
     Ok(())
 }
 
