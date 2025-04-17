@@ -1,6 +1,5 @@
-use crate::encrypt_xor::{
-    sha256d, EncryptionKey, EncryptionSalt, Encryptor, XorEncryptor, SALT_LEN,
-};
+use crate::encrypt_xor::{EncryptionKey, EncryptionSalt, Encryptor, XorEncryptor, SALT_LEN};
+use bitcoin_hashes::Sha256d;
 use hex_conservative::{DisplayHex, FromHex};
 use rand_core::{OsRng, RngCore};
 use std::fs;
@@ -439,8 +438,7 @@ fn encrypt_scrambled_secret_data(
 }
 
 fn checksum_of_payload(payload: &[u8]) -> Result<Vec<u8>, String> {
-    let checksum_full = sha256d(payload)?;
-    let checksum_truncated = checksum_full[0..CHECKSUM_LEN].to_vec();
+    let checksum_truncated = Sha256d::hash(payload).as_byte_array()[0..CHECKSUM_LEN].to_vec();
     debug_assert_eq!(checksum_truncated.len(), CHECKSUM_LEN);
     Ok(checksum_truncated)
 }

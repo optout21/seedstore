@@ -1,4 +1,4 @@
-use hex_conservative::FromHex;
+use bitcoin_hashes::Sha256d;
 
 const ENCRYPTION_KEY_LEN: usize = 32;
 pub(crate) const SALT_LEN: usize = 16;
@@ -51,25 +51,6 @@ impl Encryptor for XorEncryptor {
     }
 }
 
-// Perform SHA256
-fn sha256(input: &[u8]) -> Result<EncryptionKey, String> {
-    let hash_str = sha256::digest(input);
-    let hash = EncryptionKey::from_hex(&hash_str).map_err(|e| {
-        format!(
-            "Internal error: Could not parse hex hash digest string, {}",
-            e
-        )
-    })?;
-    Ok(hash)
-}
-
-// Perform double SHA256
-pub(crate) fn sha256d(input: &[u8]) -> Result<EncryptionKey, String> {
-    let hash1 = sha256(input)?;
-    let hash2 = sha256(&hash1)?;
-    Ok(hash2)
-}
-
 fn encryption_key_from_password(
     encryption_password: &str,
     salt: &[u8],
@@ -83,7 +64,7 @@ fn encryption_key_from_password(
     to_hash.extend(encryption_password.as_bytes());
     to_hash.extend(salt);
 
-    let encryption_key = sha256d(&to_hash)?;
+    let encryption_key = Sha256d::hash(&to_hash).to_byte_array().into();
 
     Ok(encryption_key)
 }

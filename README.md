@@ -27,11 +27,10 @@ Steps to mitigate the risks:
 ## TODO
 
 - use zeroize
-- for sha256 use bitcon_hashes crate instead of sha256
-- use diffrerent encryption (chacha20)
 - direct access to secrets available only in separate feature
 - enforce restricted permissions on the file
 - enforce password criteria (min len)
+- use diffrerent encryption (chacha20)
 - version 1.0, with format guarantee
 
 
