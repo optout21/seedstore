@@ -23,7 +23,7 @@ type EncryptionKey = [u8; ENCRYPTION_KEY_LEN];
 /// to check if a password decrypts it or not, which helps brute forcing.
 pub struct SecretStore {
     /// Secret data, encrypted with the ephemeral key, stored on fixed len
-    encrypted_secret_data: Vec<u8>,
+    scrambled_secret_data: Vec<u8>,
     nonsecret_data: Vec<u8>,
     ephemeral_scrambling_key: EncryptionKey,
 }
@@ -45,15 +45,15 @@ impl SecretStore {
         secret_payload: &Vec<u8>,
         encryption_password: &str,
     ) -> Result<Self, String> {
-        let (nonsecret_data, encrypted_secret_data) = parse_payload(&secret_payload)?;
+        let (nonsecret_data, mut encrypted_secret_data) = parse_payload(&secret_payload)?;
         let ephemeral_scrambling_key = Self::generate_scrambling_key();
-        let encrypted_secret_data = recrypt_secret_data_with_key(
-            &encrypted_secret_data,
+        let _res = scramble_encrypted_secret_data(
+            &mut encrypted_secret_data,
             encryption_password,
             &ephemeral_scrambling_key,
         )?;
         Ok(Self {
-            encrypted_secret_data,
+            scrambled_secret_data: encrypted_secret_data,
             nonsecret_data,
             ephemeral_scrambling_key,
         })
@@ -67,7 +67,7 @@ impl SecretStore {
     #[cfg(test)]
     pub(crate) fn secret_data(&self) -> Result<Vec<u8>, String> {
         // Caution: decrypted secret
-        let mut decrypted = self.encrypted_secret_data.clone();
+        let mut decrypted = self.scrambled_secret_data.clone();
         let _res = descramble_secret(&mut decrypted, &self.ephemeral_scrambling_key)?;
         Ok(decrypted)
     }
@@ -77,7 +77,7 @@ impl SecretStore {
         F: Fn(&Vec<u8>) -> Result<R, String>,
     {
         // Caution: decrypted secret
-        let mut decrypted = self.encrypted_secret_data.clone();
+        let mut decrypted = self.scrambled_secret_data.clone();
         let _res = descramble_secret(&mut decrypted, &self.ephemeral_scrambling_key)?;
         let res = f(&decrypted)?;
         Ok(res)
@@ -115,12 +115,13 @@ impl SecretStore {
     }
 
     pub fn assemble_payload(&self, encryption_password: &str) -> Result<Vec<u8>, String> {
-        let reencrypted = recrypt_secret_data_with_pw(
-            &self.encrypted_secret_data,
+        let mut encrypted = self.scrambled_secret_data.clone();
+        let _res = encrypt_scrambled_secret_data(
+            &mut encrypted,
             &self.ephemeral_scrambling_key,
             encryption_password,
         )?;
-        assemble_payload(&self.nonsecret_data, &reencrypted)
+        assemble_payload(&self.nonsecret_data, &encrypted)
     }
 
     fn generate_scrambling_key() -> EncryptionKey {
@@ -157,10 +158,10 @@ impl SecretStoreCreator {
             ));
         }
         let ephemeral_scrambling_key = SecretStore::generate_scrambling_key();
-        let mut encrypted_secret_data = secret_data.clone();
-        let _res = scramble_secret(&mut encrypted_secret_data, &ephemeral_scrambling_key)?;
+        let mut scrambled_secret_data = secret_data.clone();
+        let _res = scramble_secret(&mut scrambled_secret_data, &ephemeral_scrambling_key)?;
         Ok(SecretStore {
-            encrypted_secret_data,
+            scrambled_secret_data,
             nonsecret_data,
             ephemeral_scrambling_key,
         })
@@ -335,37 +336,31 @@ fn scramble_secret(
     Ok(())
 }
 
-fn recrypt_secret_data_key_key(
-    unencrypted: &mut Vec<u8>,
-    decryption_key: &EncryptionKey,
-    encryption_key: &EncryptionKey,
+/// Take encrypted secret, and scramble it.
+/// Caution: Secret is available unencrypted internally for a short time.
+fn scramble_encrypted_secret_data(
+    encrypted: &mut Vec<u8>,
+    decryption_password: &str,
+    scrambling_key: &EncryptionKey,
 ) -> Result<(), String> {
-    let _res = decrypt_xor(unencrypted, decryption_key)?;
-    let _res = decrypt_xor(unencrypted, encryption_key)?;
+    debug_assert!(encrypted.len() <= SECRET_DATA_MAXLEN);
+    let decryption_key = encryption_key_from_password(decryption_password)?;
+    let _res = decrypt_xor(encrypted, &decryption_key)?;
+    let _res = scramble_secret(encrypted, scrambling_key)?;
     Ok(())
 }
 
-fn recrypt_secret_data_with_key(
-    unencrypted: &Vec<u8>,
-    decryption_password: &str,
-    encryption_key: &EncryptionKey,
-) -> Result<Vec<u8>, String> {
-    debug_assert!(unencrypted.len() <= SECRET_DATA_MAXLEN);
-    let mut buffer = unencrypted.clone();
-    let decryption_key = encryption_key_from_password(decryption_password)?;
-    let _res = recrypt_secret_data_key_key(&mut buffer, &decryption_key, encryption_key)?;
-    Ok(buffer)
-}
-
-fn recrypt_secret_data_with_pw(
-    unencrypted: &Vec<u8>,
-    decryption_key: &EncryptionKey,
+/// Take scrambled secret, and encrypt it.
+/// Caution: Secret is available unencrypted internally for a short time.
+fn encrypt_scrambled_secret_data(
+    scrambled: &mut Vec<u8>,
+    scrambling_key: &EncryptionKey,
     encryption_password: &str,
-) -> Result<Vec<u8>, String> {
+) -> Result<(), String> {
     let encryption_key = encryption_key_from_password(encryption_password)?;
-    let mut buffer = unencrypted.clone();
-    let _res = recrypt_secret_data_key_key(&mut buffer, &decryption_key, &encryption_key)?;
-    Ok(buffer)
+    let _res = descramble_secret(scrambled, scrambling_key)?;
+    let _res = decrypt_xor(scrambled, &encryption_key)?;
+    Ok(())
 }
 
 fn checksum_of_payload(payload: &[u8]) -> Vec<u8> {
