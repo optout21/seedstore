@@ -25,7 +25,7 @@ pub struct SecretStore {
     /// Secret data, encrypted with the ephemeral key, stored on fixed len
     encrypted_secret_data: Vec<u8>,
     nonsecret_data: Vec<u8>,
-    ephemeral_encryption_key: EncryptionKey,
+    ephemeral_scrambling_key: EncryptionKey,
 }
 
 /// Helper class for creating the store from given data.
@@ -46,16 +46,16 @@ impl SecretStore {
         encryption_password: &str,
     ) -> Result<Self, String> {
         let (nonsecret_data, encrypted_secret_data) = parse_payload(&secret_payload)?;
-        let ephemeral_encryption_key = Self::generate_ephemeral_key();
+        let ephemeral_scrambling_key = Self::generate_scrambling_key();
         let encrypted_secret_data = recrypt_secret_data_with_key(
             &encrypted_secret_data,
             encryption_password,
-            &ephemeral_encryption_key,
+            &ephemeral_scrambling_key,
         )?;
         Ok(Self {
             encrypted_secret_data,
             nonsecret_data,
-            ephemeral_encryption_key,
+            ephemeral_scrambling_key,
         })
     }
 
@@ -63,10 +63,12 @@ impl SecretStore {
         &self.nonsecret_data
     }
 
+    /// Caution: decrypted secret is returned on copy.
     #[cfg(test)]
     pub(crate) fn secret_data(&self) -> Result<Vec<u8>, String> {
-        let decrypted =
-            decrypt_secret(&self.encrypted_secret_data, &self.ephemeral_encryption_key)?;
+        // Caution: decrypted secret
+        let mut decrypted = self.encrypted_secret_data.clone();
+        let _res = descramble_secret(&mut decrypted, &self.ephemeral_scrambling_key)?;
         Ok(decrypted)
     }
 
@@ -74,8 +76,9 @@ impl SecretStore {
     where
         F: Fn(&Vec<u8>) -> Result<R, String>,
     {
-        let decrypted =
-            decrypt_secret(&self.encrypted_secret_data, &self.ephemeral_encryption_key)?;
+        // Caution: decrypted secret
+        let mut decrypted = self.encrypted_secret_data.clone();
+        let _res = descramble_secret(&mut decrypted, &self.ephemeral_scrambling_key)?;
         let res = f(&decrypted)?;
         Ok(res)
     }
@@ -114,13 +117,13 @@ impl SecretStore {
     pub fn assemble_payload(&self, encryption_password: &str) -> Result<Vec<u8>, String> {
         let reencrypted = recrypt_secret_data_with_pw(
             &self.encrypted_secret_data,
-            &self.ephemeral_encryption_key,
+            &self.ephemeral_scrambling_key,
             encryption_password,
         )?;
         assemble_payload(&self.nonsecret_data, &reencrypted)
     }
 
-    fn generate_ephemeral_key() -> EncryptionKey {
+    fn generate_scrambling_key() -> EncryptionKey {
         let mut key = EncryptionKey::default();
         let _res = OsRng.fill_bytes(&mut key);
         key
@@ -153,12 +156,13 @@ impl SecretStoreCreator {
                 SECRET_DATA_MINLEN
             ));
         }
-        let ephemeral_encryption_key = SecretStore::generate_ephemeral_key();
-        let encrypted_secret_data = encrypt_secret(secret_data, &ephemeral_encryption_key)?;
+        let ephemeral_scrambling_key = SecretStore::generate_scrambling_key();
+        let mut encrypted_secret_data = secret_data.clone();
+        let _res = scramble_secret(&mut encrypted_secret_data, &ephemeral_scrambling_key)?;
         Ok(SecretStore {
             encrypted_secret_data,
             nonsecret_data,
-            ephemeral_encryption_key,
+            ephemeral_scrambling_key,
         })
     }
 
@@ -311,30 +315,24 @@ fn encryption_key_from_password(encryption_password: &str) -> Result<EncryptionK
     Ok(encryption_key)
 }
 
-/// Use with caution!
-fn decrypt_secret(encrypted: &Vec<u8>, encryption_key: &EncryptionKey) -> Result<Vec<u8>, String> {
-    let mut buffer = encrypted.clone();
-    let _res = decrypt_xor(&mut buffer, &encryption_key)?;
-    Ok(buffer)
+/// Descramble scrambled secret, in-place.
+/// Caution: decrypted secret is made available
+fn descramble_secret(
+    encrypted: &mut Vec<u8>,
+    scrambling_key: &EncryptionKey,
+) -> Result<(), String> {
+    let _res = decrypt_xor(encrypted, &scrambling_key)?;
+    Ok(())
 }
 
-fn encrypt_secret(
-    unencrypted: &Vec<u8>,
-    encryption_key: &EncryptionKey,
-) -> Result<Vec<u8>, String> {
-    let len = unencrypted.len();
-    if len > SECRET_DATA_MAXLEN {
-        return Err(format!(
-            "Data too long, {} vs {}",
-            unencrypted.len(),
-            SECRET_DATA_MAXLEN
-        ));
-    }
-    debug_assert!(len <= SECRET_DATA_MAXLEN);
-    let mut buffer = unencrypted.clone();
-    // Encrypt using the encryption password
-    let _res = decrypt_xor(&mut buffer, &encryption_key)?;
-    Ok(buffer)
+/// Scramble secret, in-place.
+fn scramble_secret(
+    unencrypted: &mut Vec<u8>,
+    scrambling_key: &EncryptionKey,
+) -> Result<(), String> {
+    debug_assert!(unencrypted.len() <= SECRET_DATA_MAXLEN);
+    let _res = decrypt_xor(unencrypted, &scrambling_key)?;
+    Ok(())
 }
 
 fn recrypt_secret_data_key_key(
