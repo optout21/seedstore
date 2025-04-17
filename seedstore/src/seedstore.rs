@@ -15,7 +15,7 @@ use std::str::FromStr;
 /// The encrypted part has no checksum, because if it had, it would be possible
 /// to check if a password decrypts it or not, which helps brute forcing.
 pub struct SeedStore {
-    secretstore: SecretStore,
+    pub(crate) secretstore: SecretStore,
     secp: Secp256k1<All>,
 }
 

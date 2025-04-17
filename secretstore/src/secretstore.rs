@@ -1,9 +1,10 @@
 use crate::encrypt_xor::{EncryptionKey, Encryptor, XorEncryptor};
-use hex_conservative::FromHex;
+use hex_conservative::{DisplayHex, FromHex};
 use rand_core::{OsRng, RngCore};
 use std::fs;
 
-const MAGIC_BYTE: u8 = 'S' as u8; // dec 83 hex 53
+const MAGIC_BYTES_LEN: usize = 2;
+const MAGIC_BYTES_STR: &str = "5353"; // "SS" from SeedStore; dec 83, 83
 const SECRET_DATA_MAXLEN: usize = 256;
 const SECRET_DATA_MINLEN: usize = 1;
 const NONSECRET_DATA_MAXLEN: usize = 255;
@@ -186,29 +187,32 @@ fn read_payload_from_file(path_for_secret_file: &str) -> Result<Vec<u8>, String>
     Ok(contents)
 }
 
-fn parse_payload(payload: &Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), String> {
-    let mut pos: usize = 0;
-    let magic_byte = *payload
-        .get(pos)
-        .ok_or(format!("File content is too short, {}", pos))?;
-    if magic_byte != MAGIC_BYTE {
+fn verify_payload_len(payload_len: usize, min_len: usize) -> Result<(), String> {
+    if payload_len < min_len {
         return Err(format!(
-            "Wrong magic byte ({}), check the secret file!",
-            magic_byte
+            "File content is too short, {} vs {}",
+            payload_len, min_len,
         ));
     }
-    pos += 1;
+    Ok(())
+}
+
+fn parse_payload(payload: &Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), String> {
+    let mut pos: usize = 0;
+    let _res = verify_payload_len(payload.len(), pos + MAGIC_BYTES_LEN)?;
+    let magic_bytes = &payload[pos..pos + MAGIC_BYTES_LEN];
+    if magic_bytes.to_lower_hex_string() != MAGIC_BYTES_STR {
+        return Err(format!(
+            "Wrong magic byte ({}), check the secret file!",
+            magic_bytes.to_lower_hex_string()
+        ));
+    }
+    pos += MAGIC_BYTES_LEN;
     let unencrypted_len = *payload
         .get(pos)
         .ok_or(format!("File content is too short, {}", pos))? as usize;
     pos += 1;
-    if payload.len() < pos + unencrypted_len {
-        return Err(format!(
-            "File content is too short, {} vs {}",
-            payload.len(),
-            pos + unencrypted_len
-        ));
-    }
+    let _res = verify_payload_len(payload.len(), pos + unencrypted_len)?;
     let nonsecret_data = payload[pos..pos + unencrypted_len].to_vec();
     pos += unencrypted_len;
     let encrypted_len_m1 = *payload
@@ -216,22 +220,10 @@ fn parse_payload(payload: &Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), String> {
         .ok_or(format!("File content is too short, {}", pos))?;
     let encrypted_len = encrypted_len_m1 as usize + 1;
     pos += 1;
-    if payload.len() < pos + encrypted_len {
-        return Err(format!(
-            "File content is too short, {} vs {}",
-            payload.len(),
-            pos + encrypted_len
-        ));
-    }
+    let _res = verify_payload_len(payload.len(), pos + encrypted_len)?;
     let encrypted_secret_data = payload[pos..pos + encrypted_len].to_vec();
     pos += encrypted_len;
-    if payload.len() < pos + CHECKSUM_LEN {
-        return Err(format!(
-            "File content is too short, {} vs {}",
-            payload.len(),
-            pos + CHECKSUM_LEN
-        ));
-    }
+    let _res = verify_payload_len(payload.len(), pos + CHECKSUM_LEN)?;
     let checksum_parsed = payload[pos..pos + CHECKSUM_LEN].to_vec();
     // Compute and check checksum
     let checksum_computed = checksum_of_payload(&payload[0..pos]);
@@ -257,7 +249,7 @@ fn assemble_payload(
     encrypted_secret_data: &Vec<u8>,
 ) -> Result<Vec<u8>, String> {
     let mut o = Vec::new();
-    o.push(MAGIC_BYTE);
+    o.extend(Vec::from_hex(MAGIC_BYTES_STR).unwrap());
     let nonsecret_len = nonsecret_data.len();
     if nonsecret_len > NONSECRET_DATA_MAXLEN {
         return Err(format!(

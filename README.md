@@ -2,11 +2,11 @@
 
 __!!!ForeWarning!!!__: Storing valuable secret material on a general-purpose connected computer, laptop, or mobile phone is dangerous, even in ecrypted files! Use it at your own discretion.
 
-Some software needs to store some sensitive secret information. A typical example is a bitcoin hot wallet keeping the wallet seed. Other examples are a Cashu wallet or a Nostr-aware app.
+Some software needs to store sensitive secret information. A typical example is a bitcoin hot wallet keeping the wallet seed. Other examples are a Cashu wallet or a Nostr-aware app.
 
 Whenever possible, use solutions where the secrets reside in another, more secure place: a hardware wallet for a bitcoin wallet, or a nostr signer for Nostr.
 
-However, in some scenarios you want to store your own secret. `SeedStore` offer some help here. It stored a small secret in an ecrypted file, protected by an encryption password.
+However, in some scenarios you want to store your own secret. `SeedStore` offers some help here. It stores a small secret in an ecrypted file, protected by an encryption password.
 
 
 ## Security considerations
@@ -30,12 +30,13 @@ Steps to mitigate the risks:
 - use zeroize
 - for sha256 use bitcon_hashes crate instead of sha256
 - document format
-- use and store random salt
-- (secretstore) use diffrerent encryption (chacha20)
-- feature for direct access to secrets
+- use and store random salt (for encryption)
+- use diffrerent encryption (chacha20)
+- direct access to secrets available only in separate feature
 - enforce restricted permissions on the file
-- enforce password criteria
-
+- enforce password criteria (min len)
+- 2-byte secret len
+- version 1.0, with format guarantee
 
 ## Usage Example
 
@@ -51,7 +52,8 @@ git clone https://github.com/optout21/seedstore.git
 ```
 
 ```
+cargo build
 cargo test
 ```
 
-_MSRV_: Rust 1.81 (due to fs::exists)
+_MSRV_: Rust 1.81 (due to `fs::exists`)

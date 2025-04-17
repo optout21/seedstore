@@ -7,7 +7,7 @@ use std::fs;
 const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
 const ENTROPY_OIL12: &str = "99d33a674ce99d33a674ce99d33a674c";
-const PAYLOAD1: &str = "5302000e0f438398863fda0aa2abd08a8d02b18b1d6142a3bc";
+const PAYLOAD1: &str = "535302000e0f438398863fda0aa2abd08a8d02b18b1d6a02a48b";
 const XPUB1: &str = "xpub6CDDB17Xj7pDDWedpLsED1JbPPQmyuapHmAzQEEs2P57hciCjwQ3ov7TfGsTZftAM2gVdPzE55L6gUvHguwWjY82518zw1Z3VbDeWgx3Jqs";
 const XPUB2: &str = "tpubDCRo9GmRAvEWANJ5iSfMEqPoq3uYvjBPAAjrDj5iQMxAq7DCs5orw7m9xJes8hWYAwKuH3T63WrKfzzw7g9ucbjq4LUu5cgCLUPMN7gUkrL";
 
@@ -27,6 +27,10 @@ fn create_from_data() {
         store.get_child_public_key(1).unwrap().to_string(),
         "033107250a6f0a7acf9c33436c43310467d69c858f1cf8c7a5ddc5283ae53d44c8"
     );
+
+    // uncomment for obtaining actual output
+    // let payload = store.secretstore.assemble_payload(&PASSWORD1).unwrap();
+    // assert_eq!(payload.to_lower_hex_string(), "123");
 }
 
 #[test]
