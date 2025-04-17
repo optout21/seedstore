@@ -11,7 +11,6 @@ const ENCRYPTION_KEY_LEN: usize = 32;
 const CHECKSUM_LEN: usize = 4;
 const ENCRYPT_KEY_HASH_MESSAGE: &str = "Secret Storage Key Prefix - could be anything";
 
-type SecretData = [u8; SECRET_DATA_MAXLEN];
 type EncryptionKey = [u8; ENCRYPTION_KEY_LEN];
 
 /// Store a secret data in an encrypred file.
@@ -24,9 +23,7 @@ type EncryptionKey = [u8; ENCRYPTION_KEY_LEN];
 /// to check if a password decrypts it or not, which helps brute forcing.
 pub struct SecretStore {
     /// Secret data, encrypted with the ephemeral key, stored on fixed len
-    encrypted_secret_data: SecretData,
-    /// The length of the encrypted secret data minus 1
-    encrypted_secret_data_len_m1: u8,
+    encrypted_secret_data: Vec<u8>,
     nonsecret_data: Vec<u8>,
     ephemeral_encryption_key: EncryptionKey,
 }
@@ -50,14 +47,13 @@ impl SecretStore {
     ) -> Result<Self, String> {
         let (nonsecret_data, encrypted_secret_data) = parse_payload(&secret_payload)?;
         let ephemeral_encryption_key = Self::generate_ephemeral_key();
-        let (encrypted_secret_data, encrypted_secret_data_len_m1) = recrypt_secret_data_with_key(
+        let encrypted_secret_data = recrypt_secret_data_with_key(
             &encrypted_secret_data,
             encryption_password,
             &ephemeral_encryption_key,
         )?;
         Ok(Self {
             encrypted_secret_data,
-            encrypted_secret_data_len_m1,
             nonsecret_data,
             ephemeral_encryption_key,
         })
@@ -69,11 +65,8 @@ impl SecretStore {
 
     #[cfg(test)]
     pub(crate) fn secret_data(&self) -> Result<Vec<u8>, String> {
-        let decrypted = decrypt_secret(
-            &self.encrypted_secret_data,
-            self.encrypted_secret_data_len_m1,
-            &self.ephemeral_encryption_key,
-        )?;
+        let decrypted =
+            decrypt_secret(&self.encrypted_secret_data, &self.ephemeral_encryption_key)?;
         Ok(decrypted)
     }
 
@@ -81,11 +74,8 @@ impl SecretStore {
     where
         F: Fn(&Vec<u8>) -> Result<R, String>,
     {
-        let decrypted = decrypt_secret(
-            &self.encrypted_secret_data,
-            self.encrypted_secret_data_len_m1,
-            &self.ephemeral_encryption_key,
-        )?;
+        let decrypted =
+            decrypt_secret(&self.encrypted_secret_data, &self.ephemeral_encryption_key)?;
         let res = f(&decrypted)?;
         Ok(res)
     }
@@ -124,12 +114,10 @@ impl SecretStore {
     pub fn assemble_payload(&self, encryption_password: &str) -> Result<Vec<u8>, String> {
         let reencrypted = recrypt_secret_data_with_pw(
             &self.encrypted_secret_data,
-            self.encrypted_secret_data_len_m1,
             &self.ephemeral_encryption_key,
             encryption_password,
         )?;
-        let len = (self.encrypted_secret_data_len_m1 as usize) + 1;
-        assemble_payload(&self.nonsecret_data, &reencrypted[0..len].to_vec())
+        assemble_payload(&self.nonsecret_data, &reencrypted)
     }
 
     fn generate_ephemeral_key() -> EncryptionKey {
@@ -166,11 +154,9 @@ impl SecretStoreCreator {
             ));
         }
         let ephemeral_encryption_key = SecretStore::generate_ephemeral_key();
-        let (encrypted_secret_data, encrypted_secret_data_len_m1) =
-            encrypt_secret(secret_data, &ephemeral_encryption_key)?;
+        let encrypted_secret_data = encrypt_secret(secret_data, &ephemeral_encryption_key)?;
         Ok(SecretStore {
             encrypted_secret_data,
-            encrypted_secret_data_len_m1,
             nonsecret_data,
             ephemeral_encryption_key,
         })
@@ -280,10 +266,10 @@ fn assemble_payload(
     o.push(nonsecret_len as u8);
     o.extend(nonsecret_data);
     let encrypted_secret_data_len = encrypted_secret_data.len();
-    if encrypted_secret_data_len < 1 {
+    if encrypted_secret_data_len < SECRET_DATA_MINLEN {
         return Err(format!(
             "Secret data too short ({} vs {})",
-            encrypted_secret_data_len, 1
+            encrypted_secret_data_len, SECRET_DATA_MINLEN
         ));
     }
     if encrypted_secret_data_len > SECRET_DATA_MAXLEN {
@@ -292,8 +278,11 @@ fn assemble_payload(
             encrypted_secret_data_len, SECRET_DATA_MAXLEN
         ));
     }
-    debug_assert!(encrypted_secret_data_len >= 1 && encrypted_secret_data_len <= 256);
-    let encrypted_secret_data_len_m1 = (encrypted_secret_data_len - 1) as usize;
+    debug_assert!(
+        encrypted_secret_data_len >= SECRET_DATA_MINLEN
+            && encrypted_secret_data_len <= SECRET_DATA_MAXLEN
+    );
+    let encrypted_secret_data_len_m1 = (encrypted_secret_data_len - SECRET_DATA_MINLEN) as usize;
     debug_assert!(encrypted_secret_data_len_m1 <= BYTE_MAX as usize);
     o.push(encrypted_secret_data_len_m1 as u8);
     o.extend(encrypted_secret_data);
@@ -303,8 +292,8 @@ fn assemble_payload(
     Ok(o)
 }
 
-fn decrypt_xor(data: &mut SecretData, data_len_m1: u8, key: &EncryptionKey) -> Result<(), String> {
-    for i in 0..(data_len_m1 as usize + 1) {
+fn decrypt_xor(data: &mut Vec<u8>, key: &EncryptionKey) -> Result<(), String> {
+    for i in 0..data.len() {
         data[i] = data[i] ^ key[i % ENCRYPTION_KEY_LEN];
     }
     Ok(())
@@ -323,25 +312,16 @@ fn encryption_key_from_password(encryption_password: &str) -> Result<EncryptionK
 }
 
 /// Use with caution!
-fn decrypt_secret(
-    encrypted: &SecretData,
-    encrypted_len_m1: u8,
-    encryption_key: &EncryptionKey,
-) -> Result<Vec<u8>, String> {
+fn decrypt_secret(encrypted: &Vec<u8>, encryption_key: &EncryptionKey) -> Result<Vec<u8>, String> {
     let mut buffer = encrypted.clone();
-    let _res = decrypt_xor(&mut buffer, encrypted_len_m1, &encryption_key)?;
-    let mut res = Vec::new();
-    let len = (encrypted_len_m1 as usize) + 1;
-    for i in 0..len {
-        res.push(buffer[i]);
-    }
-    Ok(res)
+    let _res = decrypt_xor(&mut buffer, &encryption_key)?;
+    Ok(buffer)
 }
 
 fn encrypt_secret(
     unencrypted: &Vec<u8>,
     encryption_key: &EncryptionKey,
-) -> Result<(SecretData, u8), String> {
+) -> Result<Vec<u8>, String> {
     let len = unencrypted.len();
     if len > SECRET_DATA_MAXLEN {
         return Err(format!(
@@ -351,24 +331,19 @@ fn encrypt_secret(
         ));
     }
     debug_assert!(len <= SECRET_DATA_MAXLEN);
-    let mut buffer = [0; SECRET_DATA_MAXLEN];
-    for i in 0..len {
-        buffer[i] = unencrypted[i];
-    }
+    let mut buffer = unencrypted.clone();
     // Encrypt using the encryption password
-    let len_m1 = (len - 1) as u8;
-    let _res = decrypt_xor(&mut buffer, len_m1, &encryption_key)?;
-    Ok((buffer, len_m1))
+    let _res = decrypt_xor(&mut buffer, &encryption_key)?;
+    Ok(buffer)
 }
 
 fn recrypt_secret_data_key_key(
-    unencrypted: &mut SecretData,
-    unencrypted_len_m1: u8,
+    unencrypted: &mut Vec<u8>,
     decryption_key: &EncryptionKey,
     encryption_key: &EncryptionKey,
 ) -> Result<(), String> {
-    let _res = decrypt_xor(unencrypted, unencrypted_len_m1, decryption_key)?;
-    let _res = decrypt_xor(unencrypted, unencrypted_len_m1, encryption_key)?;
+    let _res = decrypt_xor(unencrypted, decryption_key)?;
+    let _res = decrypt_xor(unencrypted, encryption_key)?;
     Ok(())
 }
 
@@ -376,42 +351,22 @@ fn recrypt_secret_data_with_key(
     unencrypted: &Vec<u8>,
     decryption_password: &str,
     encryption_key: &EncryptionKey,
-) -> Result<(SecretData, u8), String> {
-    let mut buffer: SecretData = [0; SECRET_DATA_MAXLEN];
-    if unencrypted.len() > SECRET_DATA_MAXLEN {
-        return Err(format!(
-            "Data too long, {} vs {}",
-            unencrypted.len(),
-            SECRET_DATA_MAXLEN
-        ));
-    }
+) -> Result<Vec<u8>, String> {
     debug_assert!(unencrypted.len() <= SECRET_DATA_MAXLEN);
-    let len_m1 = std::cmp::min(
-        (unencrypted.len() - 1) as u8,
-        (SECRET_DATA_MAXLEN - 1) as u8,
-    );
-    for i in 0..(len_m1 as usize + 1) {
-        buffer[i] = unencrypted[i];
-    }
+    let mut buffer = unencrypted.clone();
     let decryption_key = encryption_key_from_password(decryption_password)?;
-    let _res = recrypt_secret_data_key_key(&mut buffer, len_m1, &decryption_key, encryption_key)?;
-    Ok((buffer, len_m1))
+    let _res = recrypt_secret_data_key_key(&mut buffer, &decryption_key, encryption_key)?;
+    Ok(buffer)
 }
 
 fn recrypt_secret_data_with_pw(
-    unencrypted: &SecretData,
-    unencrypted_len_m1: u8,
+    unencrypted: &Vec<u8>,
     decryption_key: &EncryptionKey,
     encryption_password: &str,
-) -> Result<SecretData, String> {
+) -> Result<Vec<u8>, String> {
     let encryption_key = encryption_key_from_password(encryption_password)?;
     let mut buffer = unencrypted.clone();
-    let _res = recrypt_secret_data_key_key(
-        &mut buffer,
-        unencrypted_len_m1,
-        &decryption_key,
-        &encryption_key,
-    )?;
+    let _res = recrypt_secret_data_key_key(&mut buffer, &decryption_key, &encryption_key)?;
     Ok(buffer)
 }
 
