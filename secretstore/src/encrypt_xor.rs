@@ -1,4 +1,4 @@
-use hex_conservative::prelude::*;
+use hex_conservative::FromHex;
 
 const ENCRYPTION_KEY_LEN: usize = 32;
 const ENCRYPT_KEY_HASH_MESSAGE: &str = "Secret Storage Key Prefix - could be anything";
