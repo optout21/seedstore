@@ -9,7 +9,7 @@ const PASSWORD2: &str = "This is a different password, ain't it?";
 const NONSECRET_DATA1: &str = "010203";
 const SECRET_DATA1: &str = "0102030405060708";
 const PAYLOAD1: &str =
-    "5353010301020301d94f0043d75af528cfc638983412a0650800fc375326cb9db8e4081e56ea";
+    "5353010301020301f6ecb1e25f4945ae0605638d75c6a34208006e59b27ff2c90dd87c320627";
 
 fn create_store_from_data(nonsecret_data: Vec<u8>, secret_data: &Vec<u8>) -> SecretStore {
     SecretStoreCreator::new_from_data(nonsecret_data, secret_data).unwrap()
@@ -221,7 +221,7 @@ fn read_from_file_diff_pw() {
     assert_eq!(store.nonsecret_data().to_lower_hex_string(), "010203");
     assert_eq!(
         store.secret_data().unwrap().to_lower_hex_string(),
-        "db01afa648c01613"
+        "14bfe3f1c46b3d3c"
     );
 
     let _res = fs::remove_file(&temp_file);

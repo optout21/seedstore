@@ -1,5 +1,5 @@
 use crate::encrypt_xor::{
-    sha256, EncryptionKey, EncryptionSalt, Encryptor, XorEncryptor, SALT_LEN,
+    sha256d, EncryptionKey, EncryptionSalt, Encryptor, XorEncryptor, SALT_LEN,
 };
 use hex_conservative::{DisplayHex, FromHex};
 use rand_core::{OsRng, RngCore};
@@ -439,7 +439,7 @@ fn encrypt_scrambled_secret_data(
 }
 
 fn checksum_of_payload(payload: &[u8]) -> Result<Vec<u8>, String> {
-    let checksum_full = sha256(payload)?;
+    let checksum_full = sha256d(payload)?;
     let checksum_truncated = checksum_full[0..CHECKSUM_LEN].to_vec();
     debug_assert_eq!(checksum_truncated.len(), CHECKSUM_LEN);
     Ok(checksum_truncated)

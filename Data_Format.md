@@ -17,7 +17,7 @@ In this description `[n]` denotes a field of `n` bytes.
   [2] Encrypted Secret Data len, 2 bytes, big endian. Valid range: 1 -- 65535
   [N] Encrypted Secret Data
 - Checksum
-  [4] Cheksum, of all the previous bytes. First 4 bytes of SHA256 hash.
+  [4] Cheksum, of all the previous bytes. First 4 bytes of SHA256D hash.
 ```
 
 
