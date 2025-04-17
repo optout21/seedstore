@@ -5,7 +5,7 @@ use std::fs;
 
 const MAGIC_BYTES_LEN: usize = 2;
 const MAGIC_BYTES_STR: &str = "5353"; // "SS" from SeedStore; dec 83, 83
-const SECRET_DATA_MAXLEN: usize = 256;
+const SECRET_DATA_MAXLEN: usize = 65535;
 const SECRET_DATA_MINLEN: usize = 1;
 const NONSECRET_DATA_MAXLEN: usize = 255;
 const BYTE_MAX: u8 = 255;
@@ -244,6 +244,14 @@ fn get_next_payload_byte(payload: &Vec<u8>, pos: &mut usize) -> Result<u8, Strin
     Ok(next_byte)
 }
 
+fn u16_from_two_bytes(b1: u8, b2: u8) -> u16 {
+    ((b2 as u16) << 8) + (b1 as u16)
+}
+
+fn two_bytes_from_u16(s: u16) -> (u8, u8) {
+    ((s & 0x00ffu16) as u8, (s >> 8) as u8)
+}
+
 fn parse_payload(
     payload: &Vec<u8>,
 ) -> Result<(FormatVersion, Vec<u8>, Vec<u8>, EncryptionSalt), String> {
@@ -289,8 +297,9 @@ fn parse_payload(
     let encryption_salt = <EncryptionSalt>::try_from(encryption_salt_temp)
         .map_err(|e| format!("Internal salt conversion error {}", e))?;
 
-    let encrypted_len_m1 = get_next_payload_byte(payload, &mut pos)?;
-    let encrypted_len = encrypted_len_m1 as usize + 1;
+    let el_b1 = get_next_payload_byte(payload, &mut pos)?;
+    let el_b2 = get_next_payload_byte(payload, &mut pos)?;
+    let encrypted_len = u16_from_two_bytes(el_b1, el_b2) as usize;
 
     let _res = verify_payload_len(payload.len(), pos + encrypted_len)?;
     let encrypted_secret_data = payload[pos..pos + encrypted_len].to_vec();
@@ -367,9 +376,9 @@ fn assemble_payload(
         encrypted_secret_data_len >= SECRET_DATA_MINLEN
             && encrypted_secret_data_len <= SECRET_DATA_MAXLEN
     );
-    let encrypted_secret_data_len_m1 = (encrypted_secret_data_len - SECRET_DATA_MINLEN) as usize;
-    debug_assert!(encrypted_secret_data_len_m1 <= BYTE_MAX as usize);
-    o.push(encrypted_secret_data_len_m1 as u8);
+    let (el_b1, el_b2) = two_bytes_from_u16(encrypted_secret_data_len as u16);
+    o.push(el_b1);
+    o.push(el_b2);
 
     o.extend(encrypted_secret_data);
 
@@ -433,4 +442,21 @@ fn checksum_of_payload(payload: &[u8]) -> Vec<u8> {
     let checksum_bin = Vec::from_hex(&checksum_truncated).unwrap();
     debug_assert_eq!(checksum_bin.len(), CHECKSUM_LEN);
     checksum_bin
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{two_bytes_from_u16, u16_from_two_bytes};
+
+    #[test]
+    fn parse_u16() {
+        assert_eq!(u16_from_two_bytes(0x07, 0x03), 0x0307);
+
+        assert_eq!(two_bytes_from_u16(0x0307), (0x07, 0x03));
+
+        assert_eq!(two_bytes_from_u16(u16_from_two_bytes(201, 202)), (201, 202));
+
+        let (b1, b2) = two_bytes_from_u16(0x7348);
+        assert_eq!(u16_from_two_bytes(b1, b2), 0x7348)
+    }
 }

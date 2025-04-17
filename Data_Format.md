@@ -14,7 +14,7 @@ In this description `[n]` denotes a field of `n` bytes.
   Encrypted Secret Data section
   [1] Encryption Version. Supported value: 1.
   [16] Encryption Salt
-  [1] Encrypted Secret Data len minus 1, valid range 1 -- 256
+  [2] Encrypted Secret Data len, 2 bytes, big endian. Valid range: 1 -- 65535
   [N] Encrypted Secret Data
 - Checksum
   [4] Cheksum, of all the previous bytes. First 4 bytes of SHA256 hash.

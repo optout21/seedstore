@@ -26,7 +26,6 @@ Steps to mitigate the risks:
 
 ## TODO
 
-- 2-byte secret len
 - use zeroize
 - for sha256 use bitcon_hashes crate instead of sha256
 - use diffrerent encryption (chacha20)

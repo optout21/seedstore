@@ -8,7 +8,8 @@ const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
 const NONSECRET_DATA1: &str = "010203";
 const SECRET_DATA1: &str = "0102030405060708";
-const PAYLOAD1: &str = "53530103010203011a85d8b3885e384d9b3d8562ffa84aa70702ebd7a426e861e610dafd49";
+const PAYLOAD1: &str =
+    "5353010301020301d94f0043d75af528cfc638983412a0650800fc375326cb9db8e4081e56ea";
 
 fn create_store_from_data(nonsecret_data: Vec<u8>, secret_data: &Vec<u8>) -> SecretStore {
     SecretStoreCreator::new_from_data(nonsecret_data, secret_data).unwrap()
@@ -81,7 +82,7 @@ fn create_from_payload_generated() {
 
     // Note: cannot assert full payload, contains dynamic fields
     let payload = store.assemble_payload(&password).unwrap();
-    assert_eq!(payload.len(), 37);
+    assert_eq!(payload.len(), 38);
     assert_eq!(payload[0..8].to_lower_hex_string(), "5353010301020301");
 }
 
@@ -99,7 +100,7 @@ fn create_from_payload_different_pw() {
 
     // Note: cannot assert full payload, contains dynamic fields
     let payload = store.assemble_payload(&password).unwrap();
-    assert_eq!(payload.len(), 37);
+    assert_eq!(payload.len(), 38);
     assert_eq!(payload[0..8].to_lower_hex_string(), "5353010301020301");
 }
 
@@ -126,9 +127,9 @@ fn create_from_data_very_short() {
 #[test]
 fn neg_create_from_data_secret_too_long() {
     let nonsecret_data = Vec::from_hex(NONSECRET_DATA1).unwrap();
-    let secret_data = [7; 257].to_vec();
+    let secret_data = [7; 65536].to_vec();
     let res = SecretStoreCreator::new_from_data(nonsecret_data, &secret_data);
-    assert_eq!(res.err().unwrap(), "Secret data too long, 257 vs 256");
+    assert_eq!(res.err().unwrap(), "Secret data too long, 65536 vs 65535");
 }
 
 #[test]
@@ -177,7 +178,7 @@ fn write_to_file() {
     // check the file
     let contents = fs::read(&temp_file).unwrap();
     // Note: cannot assert full contents, it contains dynamic fields
-    assert_eq!(contents.len(), 37);
+    assert_eq!(contents.len(), 38);
     assert_eq!(contents[0..8].to_lower_hex_string(), "5353010301020301");
 
     let _res = fs::remove_file(&temp_file);
@@ -220,7 +221,7 @@ fn read_from_file_diff_pw() {
     assert_eq!(store.nonsecret_data().to_lower_hex_string(), "010203");
     assert_eq!(
         store.secret_data().unwrap().to_lower_hex_string(),
-        "f4892b57b4bf530c"
+        "db01afa648c01613"
     );
 
     let _res = fs::remove_file(&temp_file);
