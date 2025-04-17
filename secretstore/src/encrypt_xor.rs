@@ -80,3 +80,43 @@ fn perform_xor(data: &mut Vec<u8>, key: &EncryptionKey) -> Result<(), String> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod test {
+    use super::{encryption_key_from_password, Encryptor, XorEncryptor};
+    use hex_conservative::{DisplayHex, FromHex};
+
+    const PASSWORD1: &str = "password";
+    const DATA1: &str = "0102030405060708";
+    const DATA1_ENC: &str = "db52a1e576359099";
+
+    #[test]
+    fn encrypt() {
+        let mut data = Vec::from_hex(DATA1).unwrap();
+
+        let _res = XorEncryptor::encrypt(&mut data, PASSWORD1, &Vec::new()).unwrap();
+        assert_eq!(data.to_lower_hex_string(), DATA1_ENC);
+    }
+
+    #[test]
+    fn decrypt() {
+        let mut data = Vec::from_hex(DATA1_ENC).unwrap();
+
+        let _res = XorEncryptor::decrypt(&mut data, PASSWORD1, &Vec::new()).unwrap();
+        assert_eq!(data.to_lower_hex_string(), DATA1);
+    }
+
+    #[test]
+    fn encrypt_key() {
+        let encryption_key = encryption_key_from_password(PASSWORD1).unwrap();
+        assert_eq!(
+            encryption_key.to_lower_hex_string(),
+            "da50a2e1733397910da44414d18bec51d7d0997a300085830ab8a6cfd1b13b50"
+        );
+
+        let mut data = Vec::from_hex(DATA1).unwrap();
+
+        let _res = XorEncryptor::encrypt_with_key(&mut data, &encryption_key).unwrap();
+        assert_eq!(data.to_lower_hex_string(), DATA1_ENC);
+    }
+}

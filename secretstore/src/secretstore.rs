@@ -1,5 +1,5 @@
 use crate::encrypt_xor::{EncryptionKey, Encryptor, XorEncryptor};
-use hex_conservative::prelude::*;
+use hex_conservative::FromHex;
 use rand_core::{OsRng, RngCore};
 use std::fs;
 

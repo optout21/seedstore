@@ -1,5 +1,5 @@
 use crate::{SecretStore, SecretStoreCreator};
-use hex_conservative::prelude::*;
+use hex_conservative::{DisplayHex, FromHex};
 use rand::Rng;
 use std::env::temp_dir;
 use std::fs;

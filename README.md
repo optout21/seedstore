@@ -6,5 +6,6 @@
 - use zeroize
 - for sha256 use bitcon_hashes crate instead of sha256
 - document format
+- use and store random salt
 - (secretstore) use diffrerent encryption (chacha20)
 - feature for direct access to secrets
