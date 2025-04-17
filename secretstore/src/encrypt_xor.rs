@@ -1,22 +1,20 @@
 use hex_conservative::FromHex;
 
 const ENCRYPTION_KEY_LEN: usize = 32;
-const ENCRYPT_KEY_HASH_MESSAGE: &str = "Secret Storage Key Prefix - could be anything";
+pub(crate) const SALT_LEN: usize = 16;
+const ENCRYPT_KEY_HASH_MESSAGE: &str = "Secret Storage Key Prefix || Fix the Money ||";
 
 pub(crate) type EncryptionKey = [u8; ENCRYPTION_KEY_LEN];
+pub(crate) type EncryptionSalt = [u8; SALT_LEN];
 
 /// Trait for an actor that can encrypt and decrypt using a password.
 pub(crate) trait Encryptor {
     /// Encrypt some data using an encryption password and salt, in-place.
-    fn encrypt(
-        unencrypted_data: &mut Vec<u8>,
-        password: &str,
-        salt: &Vec<u8>,
-    ) -> Result<(), String>;
+    fn encrypt(unencrypted_data: &mut Vec<u8>, password: &str, salt: &[u8]) -> Result<(), String>;
 
     /// Decrypt some encrypted data using an encryption password and salt, in-place.
     /// Caution: encrypted version is returned in copy
-    fn decrypt(encrypted_data: &mut Vec<u8>, password: &str, salt: &Vec<u8>) -> Result<(), String>;
+    fn decrypt(encrypted_data: &mut Vec<u8>, password: &str, salt: &[u8]) -> Result<(), String>;
 }
 
 /// Encryptor/decryptor using bitwise XOR.
@@ -41,35 +39,50 @@ impl XorEncryptor {
 }
 
 impl Encryptor for XorEncryptor {
-    fn encrypt(
-        unencrypted_data: &mut Vec<u8>,
-        password: &str,
-        _salt: &Vec<u8>,
-    ) -> Result<(), String> {
-        let encryption_key = encryption_key_from_password(password)?;
+    fn encrypt(unencrypted_data: &mut Vec<u8>, password: &str, salt: &[u8]) -> Result<(), String> {
+        let encryption_key = encryption_key_from_password(password, salt)?;
         Self::encrypt_with_key(unencrypted_data, &encryption_key)
     }
 
     /// Decrypt some encrypted data using an encryption password and salt
-    fn decrypt(
-        encrypted_data: &mut Vec<u8>,
-        password: &str,
-        _salt: &Vec<u8>,
-    ) -> Result<(), String> {
-        let encryption_key = encryption_key_from_password(password)?;
+    fn decrypt(encrypted_data: &mut Vec<u8>, password: &str, salt: &[u8]) -> Result<(), String> {
+        let encryption_key = encryption_key_from_password(password, salt)?;
         Self::decrypt_with_key(encrypted_data, &encryption_key)
     }
 }
 
-fn encryption_key_from_password(encryption_password: &str) -> Result<EncryptionKey, String> {
-    let message = ENCRYPT_KEY_HASH_MESSAGE.to_string() + encryption_password;
-    let encryption_key_str = sha256::digest(message);
-    let encryption_key = EncryptionKey::from_hex(&encryption_key_str).map_err(|e| {
+fn sha256(input: &[u8]) -> Result<EncryptionKey, String> {
+    let hash_str = sha256::digest(input);
+    let hash = EncryptionKey::from_hex(&hash_str).map_err(|e| {
         format!(
             "Internal error: Could not parse hex hash digest string, {}",
             e
         )
     })?;
+    Ok(hash)
+}
+
+fn sha256d(input: &[u8]) -> Result<EncryptionKey, String> {
+    let hash1 = sha256(input)?;
+    let hash2 = sha256(&hash1)?;
+    Ok(hash2)
+}
+
+fn encryption_key_from_password(
+    encryption_password: &str,
+    salt: &[u8],
+) -> Result<EncryptionKey, String> {
+    if salt.len() != SALT_LEN {
+        return Err(format!("Invalid salt len {}", salt.len()));
+    }
+
+    let mut to_hash: Vec<u8> = Vec::with_capacity(256);
+    to_hash.extend(ENCRYPT_KEY_HASH_MESSAGE.to_string().as_bytes());
+    to_hash.extend(encryption_password.as_bytes());
+    to_hash.extend(salt);
+
+    let encryption_key = sha256d(&to_hash)?;
+
     Ok(encryption_key)
 }
 
@@ -87,31 +100,35 @@ mod test {
     use hex_conservative::{DisplayHex, FromHex};
 
     const PASSWORD1: &str = "password";
+    const SALT1: &str = "deadbeef000000000000000000000000";
     const DATA1: &str = "0102030405060708";
-    const DATA1_ENC: &str = "db52a1e576359099";
+    const DATA1_ENC: &str = "2d5c3c536f813ea9";
 
     #[test]
     fn encrypt() {
+        let salt = Vec::from_hex(SALT1).unwrap();
         let mut data = Vec::from_hex(DATA1).unwrap();
 
-        let _res = XorEncryptor::encrypt(&mut data, PASSWORD1, &Vec::new()).unwrap();
+        let _res = XorEncryptor::encrypt(&mut data, PASSWORD1, &salt).unwrap();
         assert_eq!(data.to_lower_hex_string(), DATA1_ENC);
     }
 
     #[test]
     fn decrypt() {
+        let salt = Vec::from_hex(SALT1).unwrap();
         let mut data = Vec::from_hex(DATA1_ENC).unwrap();
 
-        let _res = XorEncryptor::decrypt(&mut data, PASSWORD1, &Vec::new()).unwrap();
+        let _res = XorEncryptor::decrypt(&mut data, PASSWORD1, &salt).unwrap();
         assert_eq!(data.to_lower_hex_string(), DATA1);
     }
 
     #[test]
     fn encrypt_key() {
-        let encryption_key = encryption_key_from_password(PASSWORD1).unwrap();
+        let salt = Vec::from_hex(SALT1).unwrap();
+        let encryption_key = encryption_key_from_password(PASSWORD1, &salt).unwrap();
         assert_eq!(
             encryption_key.to_lower_hex_string(),
-            "da50a2e1733397910da44414d18bec51d7d0997a300085830ab8a6cfd1b13b50"
+            "2c5e3f576a8739a1d6bf1a370dc74d67430bc137a7526adedba63007d9c4bb50"
         );
 
         let mut data = Vec::from_hex(DATA1).unwrap();

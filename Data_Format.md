@@ -7,10 +7,13 @@ In this description `[n]` denotes a field of `n` bytes.
 ```
 - Header
   [2] Magic bytes, constant "5353"
+  [1] Format Version. Supported value: 1.
 - Nonsecret Data section
   [1] Nonsecret data len, in bytes, 0 -- 255
   [N] Nonsecret data
   Encrypted Secret Data section
+  [1] Encryption Version. Supported value: 1.
+  [16] Encryption Salt
   [1] Encrypted Secret Data len minus 1, valid range 1 -- 256
   [N] Encrypted Secret Data
 - Checksum

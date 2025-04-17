@@ -26,14 +26,13 @@ Steps to mitigate the risks:
 
 ## TODO
 
+- 2-byte secret len
 - use zeroize
 - for sha256 use bitcon_hashes crate instead of sha256
-- use and store random salt (for encryption)
 - use diffrerent encryption (chacha20)
 - direct access to secrets available only in separate feature
 - enforce restricted permissions on the file
 - enforce password criteria (min len)
-- 2-byte secret len
 - version 1.0, with format guarantee
 
 
