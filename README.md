@@ -26,7 +26,6 @@ Steps to mitigate the risks:
 
 ## TODO
 
-- add version
 - use zeroize
 - for sha256 use bitcon_hashes crate instead of sha256
 - use and store random salt (for encryption)
@@ -36,6 +35,7 @@ Steps to mitigate the risks:
 - enforce password criteria (min len)
 - 2-byte secret len
 - version 1.0, with format guarantee
+
 
 ## Usage Example
 

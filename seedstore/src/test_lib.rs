@@ -7,7 +7,7 @@ use std::fs;
 const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
 const ENTROPY_OIL12: &str = "99d33a674ce99d33a674ce99d33a674c";
-const PAYLOAD1: &str = "535302000e0f438398863fda0aa2abd08a8d02b18b1d6a02a48b";
+const PAYLOAD1: &str = "53530102000e0f438398863fda0aa2abd08a8d02b18b1d0cabe5a9";
 const XPUB1: &str = "xpub6CDDB17Xj7pDDWedpLsED1JbPPQmyuapHmAzQEEs2P57hciCjwQ3ov7TfGsTZftAM2gVdPzE55L6gUvHguwWjY82518zw1Z3VbDeWgx3Jqs";
 const XPUB2: &str = "tpubDCRo9GmRAvEWANJ5iSfMEqPoq3uYvjBPAAjrDj5iQMxAq7DCs5orw7m9xJes8hWYAwKuH3T63WrKfzzw7g9ucbjq4LUu5cgCLUPMN7gUkrL";
 

@@ -8,7 +8,7 @@ const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
 const NONSECRET_DATA1: &str = "010203";
 const SECRET_DATA1: &str = "0102030405060708";
-const PAYLOAD1: &str = "53530301020307db52a1e5763590990f9d6973";
+const PAYLOAD1: &str = "5353010301020307db52a1e576359099b12e7d91";
 
 fn create_store_from_data(nonsecret_data: Vec<u8>, secret_data: &Vec<u8>) -> SecretStore {
     SecretStoreCreator::new_from_data(nonsecret_data, secret_data).unwrap()
@@ -105,7 +105,7 @@ fn create_from_payload_different_pw() {
             .assemble_payload(&password)
             .unwrap()
             .to_lower_hex_string(),
-        "53530301020307dd20ba24a2f30ebbcc9ca1ed"
+        "5353010301020307dd20ba24a2f30ebbcda8b83f"
     );
 }
 

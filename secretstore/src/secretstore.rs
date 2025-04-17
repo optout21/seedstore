@@ -21,6 +21,7 @@ const CHECKSUM_LEN: usize = 4;
 /// The encrypted part has no checksum, because if it had, it would be possible
 /// to check if a password decrypts it or not, which helps brute forcing.
 pub struct SecretStore {
+    format_version: FormatVersion,
     /// Secret data, encrypted with the ephemeral key, stored on fixed len
     scrambled_secret_data: Vec<u8>,
     nonsecret_data: Vec<u8>,
@@ -30,6 +31,14 @@ pub struct SecretStore {
 /// Helper class for creating the store from given data.
 /// Should be used only by the utility that creates the encrypted file.
 pub struct SecretStoreCreator {}
+
+#[derive(Clone, Copy)]
+enum FormatVersion {
+    One = 1,
+}
+
+const FORMAT_VERSION_LATEST: FormatVersion = FormatVersion::One;
+const FORMAT_VERSION_OLDEST: FormatVersion = FormatVersion::One;
 
 impl SecretStore {
     pub fn new_from_encrypted_file(
@@ -44,7 +53,8 @@ impl SecretStore {
         secret_payload: &Vec<u8>,
         encryption_password: &str,
     ) -> Result<Self, String> {
-        let (nonsecret_data, mut encrypted_secret_data) = parse_payload(&secret_payload)?;
+        let (format_version, nonsecret_data, mut encrypted_secret_data) =
+            parse_payload(&secret_payload)?;
         let ephemeral_scrambling_key = Self::generate_scrambling_key();
         let _res = scramble_encrypted_secret_data(
             &mut encrypted_secret_data,
@@ -52,6 +62,7 @@ impl SecretStore {
             &ephemeral_scrambling_key,
         )?;
         Ok(Self {
+            format_version,
             scrambled_secret_data: encrypted_secret_data,
             nonsecret_data,
             ephemeral_scrambling_key,
@@ -120,7 +131,7 @@ impl SecretStore {
             &self.ephemeral_scrambling_key,
             encryption_password,
         )?;
-        assemble_payload(&self.nonsecret_data, &encrypted)
+        assemble_payload(self.format_version, &self.nonsecret_data, &encrypted)
     }
 
     fn generate_scrambling_key() -> EncryptionKey {
@@ -135,6 +146,7 @@ impl SecretStoreCreator {
         nonsecret_data: Vec<u8>,
         secret_data: &Vec<u8>,
     ) -> Result<SecretStore, String> {
+        let format_version = FORMAT_VERSION_LATEST;
         if nonsecret_data.len() > NONSECRET_DATA_MAXLEN {
             return Err(format!(
                 "Non-secret data too long, {} vs {}",
@@ -160,6 +172,7 @@ impl SecretStoreCreator {
         let mut scrambled_secret_data = secret_data.clone();
         let _res = scramble_secret(&mut scrambled_secret_data, &ephemeral_scrambling_key)?;
         Ok(SecretStore {
+            format_version,
             scrambled_secret_data,
             nonsecret_data,
             ephemeral_scrambling_key,
@@ -173,6 +186,15 @@ impl SecretStoreCreator {
         encryption_password: &str,
     ) -> Result<(), String> {
         secretstore.write_to_file(path_for_secret_file, encryption_password)
+    }
+}
+
+impl FormatVersion {
+    fn from_u8(byte: u8) -> Result<FormatVersion, String> {
+        match byte {
+            1 => Ok(FormatVersion::One),
+            _ => Err(format!("Invalid format {}", byte)),
+        }
     }
 }
 
@@ -197,8 +219,17 @@ fn verify_payload_len(payload_len: usize, min_len: usize) -> Result<(), String> 
     Ok(())
 }
 
-fn parse_payload(payload: &Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), String> {
+fn get_next_payload_byte(payload: &Vec<u8>, pos: &mut usize) -> Result<u8, String> {
+    let next_byte = *payload
+        .get(*pos)
+        .ok_or(format!("File content is too short, {}", pos))?;
+    *(pos) += 1;
+    Ok(next_byte)
+}
+
+fn parse_payload(payload: &Vec<u8>) -> Result<(FormatVersion, Vec<u8>, Vec<u8>), String> {
     let mut pos: usize = 0;
+
     let _res = verify_payload_len(payload.len(), pos + MAGIC_BYTES_LEN)?;
     let magic_bytes = &payload[pos..pos + MAGIC_BYTES_LEN];
     if magic_bytes.to_lower_hex_string() != MAGIC_BYTES_STR {
@@ -208,21 +239,28 @@ fn parse_payload(payload: &Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), String> {
         ));
     }
     pos += MAGIC_BYTES_LEN;
-    let unencrypted_len = *payload
-        .get(pos)
-        .ok_or(format!("File content is too short, {}", pos))? as usize;
-    pos += 1;
+
+    let format_version_byte = get_next_payload_byte(payload, &mut pos)?;
+    if format_version_byte < FORMAT_VERSION_OLDEST as u8
+        || format_version_byte > FORMAT_VERSION_LATEST as u8
+    {
+        return Err(format!("Invalid version {}", format_version_byte));
+    }
+    let format_version = FormatVersion::from_u8(format_version_byte)?;
+
+    let unencrypted_len = get_next_payload_byte(payload, &mut pos)? as usize;
+
     let _res = verify_payload_len(payload.len(), pos + unencrypted_len)?;
     let nonsecret_data = payload[pos..pos + unencrypted_len].to_vec();
     pos += unencrypted_len;
-    let encrypted_len_m1 = *payload
-        .get(pos)
-        .ok_or(format!("File content is too short, {}", pos))?;
+
+    let encrypted_len_m1 = get_next_payload_byte(payload, &mut pos)?;
     let encrypted_len = encrypted_len_m1 as usize + 1;
-    pos += 1;
+
     let _res = verify_payload_len(payload.len(), pos + encrypted_len)?;
     let encrypted_secret_data = payload[pos..pos + encrypted_len].to_vec();
     pos += encrypted_len;
+
     let _res = verify_payload_len(payload.len(), pos + CHECKSUM_LEN)?;
     let checksum_parsed = payload[pos..pos + CHECKSUM_LEN].to_vec();
     // Compute and check checksum
@@ -241,10 +279,11 @@ fn parse_payload(payload: &Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), String> {
         ));
     }
 
-    Ok((nonsecret_data, encrypted_secret_data))
+    Ok((format_version, nonsecret_data, encrypted_secret_data))
 }
 
 fn assemble_payload(
+    format_version: FormatVersion,
     nonsecret_data: &Vec<u8>,
     encrypted_secret_data: &Vec<u8>,
 ) -> Result<Vec<u8>, String> {
@@ -257,9 +296,14 @@ fn assemble_payload(
             nonsecret_len, NONSECRET_DATA_MAXLEN
         ));
     }
+
+    o.push(format_version as u8);
+
     debug_assert!(nonsecret_len <= BYTE_MAX as usize);
     o.push(nonsecret_len as u8);
+
     o.extend(nonsecret_data);
+
     let encrypted_secret_data_len = encrypted_secret_data.len();
     if encrypted_secret_data_len < SECRET_DATA_MINLEN {
         return Err(format!(
@@ -280,10 +324,13 @@ fn assemble_payload(
     let encrypted_secret_data_len_m1 = (encrypted_secret_data_len - SECRET_DATA_MINLEN) as usize;
     debug_assert!(encrypted_secret_data_len_m1 <= BYTE_MAX as usize);
     o.push(encrypted_secret_data_len_m1 as u8);
+
     o.extend(encrypted_secret_data);
+
     // compute and add checksum
     let checksum = checksum_of_payload(&o);
     o.extend(&checksum);
+
     Ok(o)
 }
 
