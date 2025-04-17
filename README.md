@@ -2,5 +2,8 @@
 
 ## TODO
 
+- add version
+- use zeroize
 - for sha256 use bitcon_hashes crate instead of sha256
-- (secretstore) use better encryption (chacha20)
+- document format
+- (secretstore) use diffrerent encryption (chacha20)

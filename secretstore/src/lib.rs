@@ -2,7 +2,7 @@
 mod test_lib;
 
 use hex_conservative::prelude::*;
-use rand::Rng;
+use rand_core::{OsRng, RngCore};
 use std::fs;
 
 const MAGIC_BYTE: u8 = 'S' as u8; // dec 83 hex 53
@@ -140,8 +140,8 @@ impl SecretStore {
     }
 
     fn generate_ephemeral_key() -> EncryptionKey {
-        let mut rng = rand::rng();
-        let key: EncryptionKey = rng.random();
+        let mut key = EncryptionKey::default();
+        let _res = OsRng.fill_bytes(&mut key);
         key
     }
 }
