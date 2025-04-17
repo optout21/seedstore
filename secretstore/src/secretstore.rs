@@ -1,4 +1,6 @@
-use crate::encrypt_xor::{EncryptionKey, EncryptionSalt, Encryptor, XorEncryptor, SALT_LEN};
+use crate::encrypt_xor::{
+    sha256, EncryptionKey, EncryptionSalt, Encryptor, XorEncryptor, SALT_LEN,
+};
 use hex_conservative::{DisplayHex, FromHex};
 use rand_core::{OsRng, RngCore};
 use std::fs;
@@ -308,7 +310,7 @@ fn parse_payload(
     let _res = verify_payload_len(payload.len(), pos + CHECKSUM_LEN)?;
     let checksum_parsed = payload[pos..pos + CHECKSUM_LEN].to_vec();
     // Compute and check checksum
-    let checksum_computed = checksum_of_payload(&payload[0..pos]);
+    let checksum_computed = checksum_of_payload(&payload[0..pos])?;
     if checksum_parsed != checksum_computed {
         return Err(format!("Checksum mismatch, check the secret file!"));
     }
@@ -383,7 +385,7 @@ fn assemble_payload(
     o.extend(encrypted_secret_data);
 
     // compute and add checksum
-    let checksum = checksum_of_payload(&o);
+    let checksum = checksum_of_payload(&o)?;
     o.extend(&checksum);
 
     Ok(o)
@@ -436,12 +438,11 @@ fn encrypt_scrambled_secret_data(
     Ok(())
 }
 
-fn checksum_of_payload(payload: &[u8]) -> Vec<u8> {
-    let checksum_full = sha256::digest(payload);
-    let checksum_truncated = &checksum_full[0..(2 * CHECKSUM_LEN)];
-    let checksum_bin = Vec::from_hex(&checksum_truncated).unwrap();
-    debug_assert_eq!(checksum_bin.len(), CHECKSUM_LEN);
-    checksum_bin
+fn checksum_of_payload(payload: &[u8]) -> Result<Vec<u8>, String> {
+    let checksum_full = sha256(payload)?;
+    let checksum_truncated = checksum_full[0..CHECKSUM_LEN].to_vec();
+    debug_assert_eq!(checksum_truncated.len(), CHECKSUM_LEN);
+    Ok(checksum_truncated)
 }
 
 #[cfg(test)]

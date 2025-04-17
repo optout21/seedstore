@@ -51,7 +51,8 @@ impl Encryptor for XorEncryptor {
     }
 }
 
-fn sha256(input: &[u8]) -> Result<EncryptionKey, String> {
+// Perform SHA256
+pub(crate) fn sha256(input: &[u8]) -> Result<EncryptionKey, String> {
     let hash_str = sha256::digest(input);
     let hash = EncryptionKey::from_hex(&hash_str).map_err(|e| {
         format!(
@@ -62,7 +63,8 @@ fn sha256(input: &[u8]) -> Result<EncryptionKey, String> {
     Ok(hash)
 }
 
-fn sha256d(input: &[u8]) -> Result<EncryptionKey, String> {
+// Perform double SHA256
+pub(crate) fn sha256d(input: &[u8]) -> Result<EncryptionKey, String> {
     let hash1 = sha256(input)?;
     let hash2 = sha256(&hash1)?;
     Ok(hash2)
