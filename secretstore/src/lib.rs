@@ -15,7 +15,6 @@ const CHECKSUM_LEN: usize = 4;
 const ENCRYPT_KEY_HASH_MESSAGE: &str = "Secret Storage Key Prefix - could be anything";
 
 type SecretData = [u8; SECRET_DATA_MAXLEN];
-pub type EncryptionPassword = String;
 type EncryptionKey = [u8; ENCRYPTION_KEY_LEN];
 
 /// Store a secret data in an encrypred file.
@@ -42,7 +41,7 @@ pub struct SecretStoreCreator {}
 impl SecretStore {
     pub fn new_from_encrypted_file(
         path_for_secret_file: &str,
-        encryption_password: &String,
+        encryption_password: &str,
     ) -> Result<Self, String> {
         let secret_payload = read_payload_from_file(path_for_secret_file)?;
         Self::new_from_payload(&secret_payload, encryption_password)
@@ -50,7 +49,7 @@ impl SecretStore {
 
     pub fn new_from_payload(
         secret_payload: &Vec<u8>,
-        encryption_password: &String,
+        encryption_password: &str,
     ) -> Result<Self, String> {
         let (nonsecret_data, encrypted_secret_data) = parse_payload(&secret_payload)?;
         let ephemeral_encryption_key = Self::generate_ephemeral_key();
@@ -99,7 +98,7 @@ impl SecretStore {
     fn write_to_file(
         &self,
         path_for_secret_file: &str,
-        encryption_password: &EncryptionPassword,
+        encryption_password: &str,
     ) -> Result<(), String> {
         let file_exists = fs::exists(path_for_secret_file).map_err(|e| {
             format!(
@@ -125,10 +124,7 @@ impl SecretStore {
         Ok(())
     }
 
-    pub fn assemble_payload(
-        &self,
-        encryption_password: &EncryptionPassword,
-    ) -> Result<Vec<u8>, String> {
+    pub fn assemble_payload(&self, encryption_password: &str) -> Result<Vec<u8>, String> {
         let reencrypted = recrypt_secret_data_with_pw(
             &self.encrypted_secret_data,
             self.encrypted_secret_data_len_m1,
@@ -187,7 +183,7 @@ impl SecretStoreCreator {
     pub fn write_to_file(
         secretstore: &SecretStore,
         path_for_secret_file: &str,
-        encryption_password: &EncryptionPassword,
+        encryption_password: &str,
     ) -> Result<(), String> {
         secretstore.write_to_file(path_for_secret_file, encryption_password)
     }
@@ -317,9 +313,7 @@ fn decrypt_xor(data: &mut SecretData, data_len_m1: u8, key: &EncryptionKey) -> R
     Ok(())
 }
 
-fn encryption_key_from_password(
-    encryption_password: &EncryptionPassword,
-) -> Result<EncryptionKey, String> {
+fn encryption_key_from_password(encryption_password: &str) -> Result<EncryptionKey, String> {
     let message = ENCRYPT_KEY_HASH_MESSAGE.to_string() + encryption_password;
     let encryption_key_str = sha256::digest(message);
     let encryption_key = EncryptionKey::from_hex(&encryption_key_str).map_err(|e| {
@@ -383,7 +377,7 @@ fn recrypt_secret_data_key_key(
 
 fn recrypt_secret_data_with_key(
     unencrypted: &Vec<u8>,
-    decryption_password: &EncryptionPassword,
+    decryption_password: &str,
     encryption_key: &EncryptionKey,
 ) -> Result<(SecretData, u8), String> {
     let mut buffer: SecretData = [0; SECRET_DATA_MAXLEN];
@@ -411,7 +405,7 @@ fn recrypt_secret_data_with_pw(
     unencrypted: &SecretData,
     unencrypted_len_m1: u8,
     decryption_key: &EncryptionKey,
-    encryption_password: &EncryptionPassword,
+    encryption_password: &str,
 ) -> Result<SecretData, String> {
     let encryption_key = encryption_key_from_password(encryption_password)?;
     let mut buffer = unencrypted.clone();

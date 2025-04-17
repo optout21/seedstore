@@ -6,7 +6,7 @@ use bitcoin::bip32::{ChildNumber, DerivationPath, Xpriv, Xpub};
 use bitcoin::key::{Keypair, Secp256k1};
 use bitcoin::secp256k1::{All, PublicKey, SecretKey};
 use bitcoin::{Network, NetworkKind};
-use secretstore::{EncryptionPassword, SecretStore, SecretStoreCreator};
+use secretstore::{SecretStore, SecretStoreCreator};
 use std::str::FromStr;
 
 /// Store a secret data in an encrypred file.
@@ -75,10 +75,13 @@ impl SeedStore {
     fn write_to_file(
         &self,
         path_for_secret_file: &str,
-        encryption_password: &EncryptionPassword,
+        encryption_password: &str,
     ) -> Result<(), String> {
-        self.secretstore
-            .write_to_file(path_for_secret_file, encryption_password)
+        SecretStoreCreator::write_to_file(
+            &self.secretstore,
+            path_for_secret_file,
+            encryption_password,
+        )
     }
 
     pub fn network(&self) -> u8 {
@@ -194,7 +197,7 @@ impl SeedStoreCreator {
     pub fn write_to_file(
         seedstore: &SeedStore,
         path_for_secret_file: &str,
-        encryption_password: &EncryptionPassword,
+        encryption_password: &str,
     ) -> Result<(), String> {
         seedstore.write_to_file(path_for_secret_file, encryption_password)
     }

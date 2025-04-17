@@ -1,4 +1,4 @@
-use crate::{EncryptionPassword, SecretStore, SecretStoreCreator};
+use crate::{SecretStore, SecretStoreCreator};
 use hex_conservative::prelude::*;
 use rand::Rng;
 use std::env::temp_dir;
@@ -14,17 +14,14 @@ fn create_store_from_data(nonsecret_data: Vec<u8>, secret_data: &Vec<u8>) -> Sec
     SecretStoreCreator::new_from_data(nonsecret_data, secret_data).unwrap()
 }
 
-fn create_store_from_payload(
-    payload: &Vec<u8>,
-    encryption_password: &EncryptionPassword,
-) -> SecretStore {
+fn create_store_from_payload(payload: &Vec<u8>, encryption_password: &str) -> SecretStore {
     SecretStore::new_from_payload(payload, encryption_password).unwrap()
 }
 
 fn create_payload_from_data(
     nonsecret_data: Vec<u8>,
     secret_data: &Vec<u8>,
-    encryption_password: &EncryptionPassword,
+    encryption_password: &str,
 ) -> Vec<u8> {
     let store = create_store_from_data(nonsecret_data, secret_data);
     let payload = store.assemble_payload(encryption_password).unwrap();
