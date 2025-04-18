@@ -16,17 +16,21 @@ const XPUB2: &str = "tpubDCRo9GmRAvEWANJ5iSfMEqPoq3uYvjBPAAjrDj5iQMxAq7DCs5orw7m
 fn create_from_data() {
     let network = 0u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let store = SeedStoreCreator::new_from_data(network, &entropy).unwrap();
+    let store = SeedStoreCreator::new_from_data(&entropy, network).unwrap();
 
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
     assert_eq!(
-        store.get_child_public_key(0).unwrap().to_string(),
+        store.get_child_public_key(0, 0).unwrap().to_string(),
         "032814221178177cb5ac81ae0ffa3be2e3c936503d6927050af739a41311f3821e"
     );
     assert_eq!(
-        store.get_child_public_key(1).unwrap().to_string(),
+        store.get_child_public_key(0, 1).unwrap().to_string(),
         "033107250a6f0a7acf9c33436c43310467d69c858f1cf8c7a5ddc5283ae53d44c8"
+    );
+    assert_eq!(
+        store.get_child_public_key(1, 0).unwrap().to_string(),
+        "031e6032dd2fbaa00a1992ef87f17e50b25c388aa91f7277fe6f1e898e2ceecccb"
     );
 
     // uncomment for obtaining actual output
@@ -38,7 +42,7 @@ fn create_from_data() {
 fn create_from_data_net_3() {
     let network = 3u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let store = SeedStoreCreator::new_from_data(network, &entropy).unwrap();
+    let store = SeedStoreCreator::new_from_data(&entropy, network).unwrap();
 
     assert_eq!(store.network(), 3);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB2);
@@ -67,7 +71,7 @@ fn get_temp_file_name() -> String {
 fn write_to_file() {
     let network = 0u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let store = SeedStoreCreator::new_from_data(network, &entropy).unwrap();
+    let store = SeedStoreCreator::new_from_data(&entropy, network).unwrap();
 
     let temp_file = get_temp_file_name();
     let password = PASSWORD1.to_owned();
