@@ -4,9 +4,10 @@ use hex_conservative::{DisplayHex, FromHex};
 use rand_core::{OsRng, RngCore};
 use std::fs;
 
+/// Minimum accepted password length
 pub const PASSWORD_MIN_LEN: usize = 7;
-pub const SECRET_DATA_MAX_LEN: usize = 65535;
 pub const SECRET_DATA_MIN_LEN: usize = 1;
+pub const SECRET_DATA_MAX_LEN: usize = 65535;
 pub const NONSECRET_DATA_MAX_LEN: usize = 255;
 
 const MAGIC_BYTES_LEN: usize = 2;
@@ -44,6 +45,7 @@ const FORMAT_VERSION_LATEST: FormatVersion = FormatVersion::One;
 const FORMAT_VERSION_OLDEST: FormatVersion = FormatVersion::One;
 
 impl SecretStore {
+    /// Load the secret from a password-protected secret file.
     pub fn new_from_encrypted_file(
         path_for_secret_file: &str,
         encryption_password: &str,
@@ -52,6 +54,8 @@ impl SecretStore {
         Self::new_from_payload(&secret_payload, encryption_password)
     }
 
+    /// Load the secret store from encrypted data.
+    /// Typically the data is stored in a file, but this method takes the contents directly.
     pub fn new_from_payload(
         secret_payload: &Vec<u8>,
         encryption_password: &str,
@@ -131,7 +135,10 @@ impl SecretStore {
         Ok(())
     }
 
-    pub fn assemble_encrypted_payload(&self, encryption_password: &str) -> Result<Vec<u8>, String> {
+    pub(crate) fn assemble_encrypted_payload(
+        &self,
+        encryption_password: &str,
+    ) -> Result<Vec<u8>, String> {
         let mut encrypted = self.scrambled_secret_data.clone();
         let _res = encrypt_scrambled_secret_data(
             &mut encrypted,
@@ -161,6 +168,8 @@ impl SecretStore {
 }
 
 impl SecretStoreCreator {
+    /// Create a new store instance from given contained data.
+    /// The store can be written out to file using [`write_to_file`]
     pub fn new_from_data(
         nonsecret_data: Vec<u8>,
         secret_data: &Vec<u8>,
@@ -200,9 +209,9 @@ impl SecretStoreCreator {
         })
     }
 
-    /// Write out secret content to a file.
+    /// Write out the encrypted contents to a file.
     /// ['encryption_password']: The passowrd to be used for encryption, should be strong.
-    /// Minimal length is checked.
+    /// Minimal length of password is checked.
     pub fn write_to_file(
         secretstore: &SecretStore,
         path_for_secret_file: &str,

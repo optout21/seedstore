@@ -24,6 +24,7 @@ pub struct SeedStore {
 pub struct SeedStoreCreator {}
 
 impl SeedStore {
+    /// Load the secret from a password-protected secret file.
     pub fn new_from_encrypted_file(
         path_for_secret_file: &str,
         encryption_password: &str,
@@ -33,6 +34,8 @@ impl SeedStore {
         Self::new_from_secretstore(secretstore)
     }
 
+    /// Load the secret store from encrypted data.
+    /// Typically the data is stored in a file, but this method takes the contents directly.
     pub fn new_from_payload(
         secret_payload: &Vec<u8>,
         encryption_password: &str,
@@ -81,12 +84,14 @@ impl SeedStore {
         )
     }
 
+    /// Accessor for network byte.
     pub fn network(&self) -> u8 {
         let nonsecret_data = self.secretstore.nonsecret_data();
         debug_assert_eq!(nonsecret_data.len(), 2);
         nonsecret_data[0]
     }
 
+    /// Convert network byte to [`bitcoin::network::Netork`]
     pub fn network_as_enum(&self) -> Network {
         match self.network() {
             0 => Network::Bitcoin,
@@ -98,6 +103,7 @@ impl SeedStore {
         }
     }
 
+    /// Accessor for the XPUB, generated from the secret entropy (and network).
     pub fn get_xpub(&self) -> Result<Xpub, String> {
         let xpub = self
             .secretstore
@@ -105,6 +111,9 @@ impl SeedStore {
         Ok(xpub)
     }
 
+    /// Return a child public key, generated from the secret entropy (and network).
+    /// Standard BIP84 derivation path is used, with the last index provided.
+    /// [`index`] The last index (account) of the derivation path.
     pub fn get_child_public_key(&self, index: u32) -> Result<PublicKey, String> {
         let pubkey = self
             .secretstore
@@ -112,7 +121,10 @@ impl SeedStore {
         Ok(pubkey)
     }
 
-    /// Use with caution!
+    /// Return a child PRIVATE key, generated from the secret entropy (and network).
+    /// Caution: partial unencrypted secret is returned in copy!
+    /// Standard BIP84 derivation path is used, with the last index provided.
+    /// [`index`] The last index (account) of the derivation path.
     pub fn get_child_private_key(&self, index: u32) -> Result<SecretKey, String> {
         let privkey = self
             .secretstore
@@ -163,7 +175,7 @@ impl SeedStore {
         Ok(keypair)
     }
 
-    pub fn get_child_public_key_intern(
+    fn get_child_public_key_intern(
         &self,
         entropy: &Vec<u8>,
         index: u32,
@@ -183,14 +195,18 @@ impl SeedStore {
 }
 
 impl SeedStoreCreator {
-    pub fn new_from_data(network: u8, entropy: &Vec<u8>) -> Result<SeedStore, String> {
+    /// Create a new store instance from given secret entropy bytes and network byte.
+    /// The store can be written out to file using [`write_to_file`]
+    pub fn new_from_data(entropy: &Vec<u8>, network: u8) -> Result<SeedStore, String> {
         let entropy_checksum = checksum_of_entropy(entropy)?;
         let nonsecret_data = vec![network, entropy_checksum];
         let secretstore = SecretStoreCreator::new_from_data(nonsecret_data, entropy)?;
         SeedStore::new_from_secretstore(secretstore)
     }
 
-    /// Write out secret content to a file.
+    /// Write out the encrypted contents to a file.
+    /// ['encryption_password']: The passowrd to be used for encryption, should be strong.
+    /// Minimal length of password is checked.
     pub fn write_to_file(
         seedstore: &SeedStore,
         path_for_secret_file: &str,
