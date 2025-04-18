@@ -26,7 +26,7 @@ pub struct SeedStoreCreator {}
 impl SeedStore {
     pub fn new_from_encrypted_file(
         path_for_secret_file: &str,
-        encryption_password: &String,
+        encryption_password: &str,
     ) -> Result<Self, String> {
         let secretstore =
             SecretStore::new_from_encrypted_file(path_for_secret_file, encryption_password)?;
@@ -35,7 +35,7 @@ impl SeedStore {
 
     pub fn new_from_payload(
         secret_payload: &Vec<u8>,
-        encryption_password: &String,
+        encryption_password: &str,
     ) -> Result<Self, String> {
         let secretstore = SecretStore::new_from_payload(secret_payload, encryption_password)?;
         Self::new_from_secretstore(secretstore)

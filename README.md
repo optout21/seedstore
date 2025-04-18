@@ -36,7 +36,28 @@ Steps to mitigate the risks:
 
 ## Usage Example
 
-TODO
+Reading secret from file:
+
+```
+use seedstore::SeedStore;
+
+    let seedstore = SeedStore::new_from_encrypted_file("./sample.secret", "SecretPassword")?;
+    let network = seedstore.network();
+    let xpub = seedstore.get_xpub().unwrap();
+}
+```
+
+Writing out seed secret:
+
+```
+use seedstore::SeedStoreCreator;
+
+    let seedstore = SeedStoreCreator::new_from_data(0, &entropy_bytes)?;
+    SeedStoreCreator::write_to_file(&seedstore, "./sample.secret", "SecretPassword")?;
+}
+```
+
+See the [example programs](seedstore/examples).
 
 
 ## Usage Guide
@@ -50,6 +71,7 @@ git clone https://github.com/optout21/seedstore.git
 ```
 cargo build
 cargo test
+cargo run --example create_seedstore
 ```
 
 _MSRV_: Rust 1.81 (due to `fs::exists`)
