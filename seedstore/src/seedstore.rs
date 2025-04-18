@@ -1,5 +1,5 @@
 use bip39::Mnemonic;
-use bitcoin::bip32::{ChildNumber, DerivationPath, Xpriv, Xpub};
+use bitcoin::bip32::{DerivationPath, Xpriv, Xpub};
 use bitcoin::key::{Keypair, Secp256k1};
 use bitcoin::secp256k1::{All, PublicKey, SecretKey};
 use bitcoin::{Network, NetworkKind};
@@ -104,31 +104,44 @@ impl SeedStore {
     }
 
     /// Accessor for the XPUB, generated from the secret entropy (and network).
+    /// Standard level-3 XPub is returned, using standaard BIP84 derivation path (ie. "m/84'/x'/0'").
     pub fn get_xpub(&self) -> Result<Xpub, String> {
         let xpub = self
             .secretstore
-            .processed_secret_data(|entropy| self.xpub_from_entropy(entropy))?;
+            .processed_secret_data(|entropy| self.xpub3_from_entropy(entropy))?;
         Ok(xpub)
     }
 
     /// Return a child public key, generated from the secret entropy (and network).
-    /// Standard BIP84 derivation path is used, with the last index provided.
-    /// [`index`] The last index (account) of the derivation path.
-    pub fn get_child_public_key(&self, index: u32) -> Result<PublicKey, String> {
-        let pubkey = self
-            .secretstore
-            .processed_secret_data(|entropy| self.get_child_public_key_intern(entropy, index))?;
+    /// [`derivation`] The derivation path to use, eg. "m/84'/0'/0'/0/11"
+    pub fn get_child_public_key_derivation(&self, derivation: &str) -> Result<PublicKey, String> {
+        let pubkey = self.secretstore.processed_secret_data(|entropy| {
+            self.get_child_public_key_intern(entropy, derivation)
+        })?;
         Ok(pubkey)
+    }
+
+    /// Return a child public key, generated from the secret entropy (and network).
+    /// Standard BIP84 derivation path is used, with the last two indices provided.
+    /// [`index4`] The but-last index (4th, change) of the derivation path, usually 0.
+    /// [`index5`] The last index (5th, account) of the derivation path.
+    pub fn get_child_public_key(&self, index4: u32, index5: u32) -> Result<PublicKey, String> {
+        let derivation = format!(
+            "{}/{}/{}",
+            self.default_account_derivation_path(),
+            index4,
+            index5
+        );
+        self.get_child_public_key_derivation(&derivation)
     }
 
     /// Return a child PRIVATE key, generated from the secret entropy (and network).
     /// Caution: partial unencrypted secret is returned in copy!
-    /// Standard BIP84 derivation path is used, with the last index provided.
-    /// [`index`] The last index (account) of the derivation path.
-    pub fn get_child_private_key(&self, index: u32) -> Result<SecretKey, String> {
-        let privkey = self
-            .secretstore
-            .processed_secret_data(|entropy| self.get_child_private_key_intern(entropy, index))?;
+    /// [`derivation`] The derivation path to use, eg. "m/84'/0'/0'/0/11"
+    pub fn get_child_private_key_derivation(&self, derivation: &str) -> Result<SecretKey, String> {
+        let privkey = self.secretstore.processed_secret_data(|entropy| {
+            self.get_child_private_key_intern(entropy, derivation)
+        })?;
         Ok(privkey)
     }
 
@@ -139,57 +152,70 @@ impl SeedStore {
         }
     }
 
-    fn xpriv_from_entropy(&self, entropy: &Vec<u8>) -> Result<Xpriv, String> {
+    fn seed_from_entropy(&self, entropy: &Vec<u8>) -> Result<[u8; 64], String> {
         let mnemo = Mnemonic::from_entropy(entropy)
             .map_err(|e| format!("Could not process entropy {}", e.to_string()))?;
         let seed = mnemo.to_seed_normalized("");
+        Ok(seed)
+    }
+
+    fn xpriv3_from_entropy(&self, entropy: &Vec<u8>) -> Result<Xpriv, String> {
+        let seed = self.seed_from_entropy(entropy)?;
         let xpriv = Xpriv::new_master(
             <Network as Into<NetworkKind>>::into(self.network_as_enum()),
             &seed,
         )
-        .expect("Creating XPriv");
+        .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
         let derivation = self.default_account_derivation_path();
-        let derivation_path_3 =
-            DerivationPath::from_str(&derivation).expect("Creating DerivationPath");
+        let derivation_path_3 = DerivationPath::from_str(&derivation)
+            .map_err(|e| format!("Internal derivation conversion error {}", e))?;
         let xpriv_level_3 = xpriv
             .derive_priv(&self.secp, &derivation_path_3)
-            .expect("Derive level3 xpriv");
+            .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
         Ok(xpriv_level_3)
     }
 
-    fn xpub_from_entropy(&self, entropy: &Vec<u8>) -> Result<Xpub, String> {
-        let xpriv_level_3 = self.xpriv_from_entropy(entropy)?;
+    fn xpub3_from_entropy(&self, entropy: &Vec<u8>) -> Result<Xpub, String> {
+        let xpriv_level_3 = self.xpriv3_from_entropy(entropy)?;
         let xpub_level_3 = Xpub::from_priv(&self.secp, &xpriv_level_3);
         Ok(xpub_level_3)
     }
 
-    fn get_child_keypair_intern(&self, entropy: &Vec<u8>, index: u32) -> Result<Keypair, String> {
-        let xpriv = self.xpriv_from_entropy(entropy)?;
-        // derive
-        let index_4 = ChildNumber::from_normal_idx(0).unwrap();
-        let index_5 = ChildNumber::from_normal_idx(index).unwrap();
-        let xpriv_5 = xpriv
-            .derive_priv(&self.secp, &vec![index_4, index_5])
-            .map_err(|e| format!("Derivation error {}", e))?;
-        let keypair = xpriv_5.to_keypair(&self.secp);
+    fn get_child_keypair_intern(
+        &self,
+        entropy: &Vec<u8>,
+        derivation_path: &str,
+    ) -> Result<Keypair, String> {
+        let seed = self.seed_from_entropy(entropy)?;
+        let xpriv = Xpriv::new_master(
+            <Network as Into<NetworkKind>>::into(self.network_as_enum()),
+            &seed,
+        )
+        .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
+        let derivation = DerivationPath::from_str(&derivation_path)
+            .map_err(|e| format!("Internal derivation conversion error {}", e))?;
+        let child_xpriv = xpriv
+            .derive_priv(&self.secp, &derivation)
+            .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
+        let keypair = child_xpriv.to_keypair(&self.secp);
         Ok(keypair)
     }
 
     fn get_child_public_key_intern(
         &self,
         entropy: &Vec<u8>,
-        index: u32,
+        derivation: &str,
     ) -> Result<PublicKey, String> {
-        let keypair = self.get_child_keypair_intern(entropy, index)?;
+        let keypair = self.get_child_keypair_intern(entropy, &derivation)?;
         Ok(keypair.public_key())
     }
 
     fn get_child_private_key_intern(
         &self,
         entropy: &Vec<u8>,
-        index: u32,
+        derivation: &str,
     ) -> Result<SecretKey, String> {
-        let keypair = self.get_child_keypair_intern(entropy, index)?;
+        let keypair = self.get_child_keypair_intern(entropy, &derivation)?;
         Ok(keypair.secret_key())
     }
 }
