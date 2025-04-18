@@ -29,7 +29,6 @@ Steps to mitigate the risks:
 - use zeroize
 - direct access to secrets available only in separate feature
 - enforce restricted permissions on the file
-- enforce password criteria (min len)
 - use diffrerent encryption (chacha20)
 - version 1.0, with format guarantee
 
@@ -41,7 +40,7 @@ Reading secret from file:
 ```
 use seedstore::SeedStore;
 
-    let seedstore = SeedStore::new_from_encrypted_file("./sample.secret", "SecretPassword")?;
+    let seedstore = SeedStore::new_from_encrypted_file("./sample.secret", "PasswordVEWFVFDHHEBNJS3")?;
     let network = seedstore.network();
     let xpub = seedstore.get_xpub().unwrap();
 }
@@ -53,7 +52,7 @@ Writing out seed secret:
 use seedstore::SeedStoreCreator;
 
     let seedstore = SeedStoreCreator::new_from_data(0, &entropy_bytes)?;
-    SeedStoreCreator::write_to_file(&seedstore, "./sample.secret", "SecretPassword")?;
+    SeedStoreCreator::write_to_file(&seedstore, "./sample.secret", "PasswordVEWFVFDHHEBNJS3")?;
 }
 ```
 

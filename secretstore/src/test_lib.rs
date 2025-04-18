@@ -25,7 +25,9 @@ fn create_payload_from_data(
     encryption_password: &str,
 ) -> Vec<u8> {
     let store = create_store_from_data(nonsecret_data, secret_data);
-    let payload = store.assemble_payload(encryption_password).unwrap();
+    let payload = store
+        .assemble_encrypted_payload(encryption_password)
+        .unwrap();
     payload
 }
 
@@ -39,7 +41,7 @@ fn create_from_data() {
     assert_eq!(store.secret_data().unwrap().clone(), secret_data);
 
     // uncomment for obtaining actual output
-    // let payload = store.assemble_payload(&PASSWORD1).unwrap();
+    // let payload = store.assemble_encrypted_payload(&PASSWORD1).unwrap();
     // assert_eq!(payload.to_lower_hex_string(), "123");
 }
 
@@ -61,7 +63,7 @@ fn create_from_payload_const() {
 
     assert_eq!(
         store
-            .assemble_payload(&password)
+            .assemble_encrypted_payload(&password)
             .unwrap()
             .to_lower_hex_string(),
         PAYLOAD1
@@ -81,7 +83,7 @@ fn create_from_payload_generated() {
     assert_eq!(store.secret_data().unwrap().clone(), secret_data);
 
     // Note: cannot assert full payload, contains dynamic fields
-    let payload = store.assemble_payload(&password).unwrap();
+    let payload = store.assemble_encrypted_payload(&password).unwrap();
     assert_eq!(payload.len(), 38);
     assert_eq!(payload[0..8].to_lower_hex_string(), "5353010301020301");
 }
@@ -99,7 +101,7 @@ fn create_from_payload_different_pw() {
     assert_eq!(store.secret_data().unwrap().clone(), secret_data);
 
     // Note: cannot assert full payload, contains dynamic fields
-    let payload = store.assemble_payload(&password).unwrap();
+    let payload = store.assemble_encrypted_payload(&password).unwrap();
     assert_eq!(payload.len(), 38);
     assert_eq!(payload[0..8].to_lower_hex_string(), "5353010301020301");
 }
@@ -225,4 +227,15 @@ fn read_from_file_diff_pw() {
     );
 
     let _res = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn neg_create_password_too_short() {
+    let nonsecret_data = Vec::from_hex(NONSECRET_DATA1).unwrap();
+    let secret_data = Vec::from_hex(SECRET_DATA1).unwrap();
+    let store = create_store_from_data(nonsecret_data.clone(), &secret_data);
+
+    let short_password = "no";
+    let res = SecretStoreCreator::write_to_file(&store, "dummy_filename", short_password);
+    assert_eq!(res.err().unwrap(), "Password is too short! (2 vs 7)");
 }

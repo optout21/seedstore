@@ -30,7 +30,7 @@ fn create_from_data() {
     );
 
     // uncomment for obtaining actual output
-    // let payload = store.secretstore.assemble_payload(&PASSWORD1).unwrap();
+    // let payload = store.secretstore.assemble_encrypted_payload(&PASSWORD1).unwrap();
     // assert_eq!(payload.to_lower_hex_string(), "123");
 }
 
