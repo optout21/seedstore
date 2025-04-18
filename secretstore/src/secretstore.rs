@@ -4,14 +4,15 @@ use hex_conservative::{DisplayHex, FromHex};
 use rand_core::{OsRng, RngCore};
 use std::fs;
 
+pub const PASSWORD_MIN_LEN: usize = 7;
+pub const SECRET_DATA_MAX_LEN: usize = 65535;
+pub const SECRET_DATA_MIN_LEN: usize = 1;
+pub const NONSECRET_DATA_MAX_LEN: usize = 255;
+
 const MAGIC_BYTES_LEN: usize = 2;
 const MAGIC_BYTES_STR: &str = "5353"; // "SS" from SeedStore; dec 83, 83
-const SECRET_DATA_MAXLEN: usize = 65535;
-const SECRET_DATA_MINLEN: usize = 1;
-const NONSECRET_DATA_MAXLEN: usize = 255;
-const BYTE_MAX: u8 = 255;
-// const ENCRYPTION_KEY_LEN: usize = 32;
 const CHECKSUM_LEN: usize = 4;
+const BYTE_MAX: u8 = 255;
 
 /// Store a secret data in an encrypred file.
 /// Also store some nonsecret data.
@@ -77,20 +78,22 @@ impl SecretStore {
         &self.nonsecret_data
     }
 
-    /// Caution: decrypted secret is returned on copy.
+    /// Caution: unencrypted secret is returned in copy.
     #[cfg(test)]
     pub(crate) fn secret_data(&self) -> Result<Vec<u8>, String> {
-        // Caution: decrypted secret
+        // Caution: unencrypted secret
         let mut decrypted = self.scrambled_secret_data.clone();
         let _res = descramble_secret(&mut decrypted, &self.ephemeral_scrambling_key)?;
         Ok(decrypted)
     }
 
+    /// Invokes a processor function on the unencrypted secret data.
+    /// Caution: unencrypted secret is made available in a user processor method.
     pub fn processed_secret_data<F, R>(&self, f: F) -> Result<R, String>
     where
         F: Fn(&Vec<u8>) -> Result<R, String>,
     {
-        // Caution: decrypted secret
+        // Caution: unencrypted secret
         let mut decrypted = self.scrambled_secret_data.clone();
         let _res = descramble_secret(&mut decrypted, &self.ephemeral_scrambling_key)?;
         let res = f(&decrypted)?;
@@ -117,8 +120,8 @@ impl SecretStore {
                 path_for_secret_file
             ));
         }
-        let payload = self.assemble_payload(encryption_password)?;
-        let _res = fs::write(path_for_secret_file, payload).map_err(|e| {
+        let encrypted_payload = self.assemble_encrypted_payload(encryption_password)?;
+        let _res = fs::write(path_for_secret_file, encrypted_payload).map_err(|e| {
             format!(
                 "Error writing to file {}, {}",
                 path_for_secret_file,
@@ -128,7 +131,7 @@ impl SecretStore {
         Ok(())
     }
 
-    pub fn assemble_payload(&self, encryption_password: &str) -> Result<Vec<u8>, String> {
+    pub fn assemble_encrypted_payload(&self, encryption_password: &str) -> Result<Vec<u8>, String> {
         let mut encrypted = self.scrambled_secret_data.clone();
         let _res = encrypt_scrambled_secret_data(
             &mut encrypted,
@@ -163,25 +166,25 @@ impl SecretStoreCreator {
         secret_data: &Vec<u8>,
     ) -> Result<SecretStore, String> {
         let format_version = FORMAT_VERSION_LATEST;
-        if nonsecret_data.len() > NONSECRET_DATA_MAXLEN {
+        if nonsecret_data.len() > NONSECRET_DATA_MAX_LEN {
             return Err(format!(
                 "Non-secret data too long, {} vs {}",
                 nonsecret_data.len(),
-                NONSECRET_DATA_MAXLEN
+                NONSECRET_DATA_MAX_LEN
             ));
         }
-        if secret_data.len() > SECRET_DATA_MAXLEN {
+        if secret_data.len() > SECRET_DATA_MAX_LEN {
             return Err(format!(
                 "Secret data too long, {} vs {}",
                 secret_data.len(),
-                SECRET_DATA_MAXLEN
+                SECRET_DATA_MAX_LEN
             ));
         }
-        if secret_data.len() < SECRET_DATA_MINLEN {
+        if secret_data.len() < SECRET_DATA_MIN_LEN {
             return Err(format!(
                 "Secret data too short, {} vs {}",
                 secret_data.len(),
-                SECRET_DATA_MINLEN
+                SECRET_DATA_MIN_LEN
             ));
         }
         let encryption_salt = SecretStore::generate_encryption_salt();
@@ -198,6 +201,8 @@ impl SecretStoreCreator {
     }
 
     /// Write out secret content to a file.
+    /// ['encryption_password']: The passowrd to be used for encryption, should be strong.
+    /// Minimal length is checked.
     pub fn write_to_file(
         secretstore: &SecretStore,
         path_for_secret_file: &str,
@@ -341,10 +346,10 @@ fn assemble_payload(
     let mut o: Vec<u8> = Vec::with_capacity(256);
     o.extend(Vec::from_hex(MAGIC_BYTES_STR).unwrap());
     let nonsecret_len = nonsecret_data.len();
-    if nonsecret_len > NONSECRET_DATA_MAXLEN {
+    if nonsecret_len > NONSECRET_DATA_MAX_LEN {
         return Err(format!(
             "Nonsecret data too long ({} vs {})",
-            nonsecret_len, NONSECRET_DATA_MAXLEN
+            nonsecret_len, NONSECRET_DATA_MAX_LEN
         ));
     }
 
@@ -361,21 +366,21 @@ fn assemble_payload(
     o.extend(encryption_salt);
 
     let encrypted_secret_data_len = encrypted_secret_data.len();
-    if encrypted_secret_data_len < SECRET_DATA_MINLEN {
+    if encrypted_secret_data_len < SECRET_DATA_MIN_LEN {
         return Err(format!(
             "Secret data too short ({} vs {})",
-            encrypted_secret_data_len, SECRET_DATA_MINLEN
+            encrypted_secret_data_len, SECRET_DATA_MIN_LEN
         ));
     }
-    if encrypted_secret_data_len > SECRET_DATA_MAXLEN {
+    if encrypted_secret_data_len > SECRET_DATA_MAX_LEN {
         return Err(format!(
             "Secret data too long ({} vs {})",
-            encrypted_secret_data_len, SECRET_DATA_MAXLEN
+            encrypted_secret_data_len, SECRET_DATA_MAX_LEN
         ));
     }
     debug_assert!(
-        encrypted_secret_data_len >= SECRET_DATA_MINLEN
-            && encrypted_secret_data_len <= SECRET_DATA_MAXLEN
+        encrypted_secret_data_len >= SECRET_DATA_MIN_LEN
+            && encrypted_secret_data_len <= SECRET_DATA_MAX_LEN
     );
     let (el_b1, el_b2) = two_bytes_from_u16(encrypted_secret_data_len as u16);
     o.push(el_b1);
@@ -391,7 +396,7 @@ fn assemble_payload(
 }
 
 /// Descramble scrambled secret, in-place.
-/// Caution: decrypted secret is made available
+/// Caution: unencrypted secret is made available
 fn descramble_secret(
     encrypted: &mut Vec<u8>,
     scrambling_key: &EncryptionKey,
@@ -405,33 +410,45 @@ fn scramble_secret(
     unencrypted: &mut Vec<u8>,
     scrambling_key: &EncryptionKey,
 ) -> Result<(), String> {
-    debug_assert!(unencrypted.len() <= SECRET_DATA_MAXLEN);
+    debug_assert!(unencrypted.len() <= SECRET_DATA_MAX_LEN);
     let _res = XorEncryptor::encrypt_with_key(unencrypted, &scrambling_key)?;
     Ok(())
 }
 
 /// Take encrypted secret, and scramble it.
-/// Caution: Secret is available unencrypted internally for a short time.
+/// Caution: unencrypted secret is available internally for a short time.
 fn scramble_encrypted_secret_data(
     encrypted: &mut Vec<u8>,
     decryption_password: &str,
     encryption_salt: &EncryptionSalt,
     scrambling_key: &EncryptionKey,
 ) -> Result<(), String> {
-    debug_assert!(encrypted.len() <= SECRET_DATA_MAXLEN);
+    debug_assert!(encrypted.len() <= SECRET_DATA_MAX_LEN);
     let _res = XorEncryptor::decrypt(encrypted, decryption_password, encryption_salt)?;
     let _res = scramble_secret(encrypted, scrambling_key)?;
     Ok(())
 }
 
+fn validate_password(encryption_password: &str) -> Result<(), String> {
+    if encryption_password.len() < PASSWORD_MIN_LEN {
+        return Err(format!(
+            "Password is too short! ({} vs {})",
+            encryption_password.len(),
+            PASSWORD_MIN_LEN
+        ));
+    }
+    Ok(())
+}
+
 /// Take scrambled secret, and encrypt it.
-/// Caution: Secret is available unencrypted internally for a short time.
+/// Caution: unencrypted secret is available internally for a short time.
 fn encrypt_scrambled_secret_data(
     scrambled: &mut Vec<u8>,
     scrambling_key: &EncryptionKey,
     encryption_password: &str,
     salt: &EncryptionSalt,
 ) -> Result<(), String> {
+    let _res = validate_password(encryption_password)?;
     let _res = descramble_secret(scrambled, scrambling_key)?;
     let _res = XorEncryptor::encrypt(scrambled, encryption_password, salt);
     Ok(())

@@ -13,7 +13,7 @@ pub(crate) trait Encryptor {
     fn encrypt(unencrypted_data: &mut Vec<u8>, password: &str, salt: &[u8]) -> Result<(), String>;
 
     /// Decrypt some encrypted data using an encryption password and salt, in-place.
-    /// Caution: encrypted version is returned in copy
+    /// Caution: unencrypted data is returned in copy
     fn decrypt(encrypted_data: &mut Vec<u8>, password: &str, salt: &[u8]) -> Result<(), String>;
 }
 
