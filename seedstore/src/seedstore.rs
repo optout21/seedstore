@@ -2,7 +2,7 @@ use bip39::Mnemonic;
 use bitcoin::bip32::{DerivationPath, Xpriv, Xpub};
 use bitcoin::key::{Keypair, Secp256k1};
 use bitcoin::secp256k1::{All, PublicKey, SecretKey};
-use bitcoin::{Network, NetworkKind};
+use bitcoin::{Address, CompressedPublicKey, Network, NetworkKind};
 use secretstore::{SecretStore, SecretStoreCreator};
 use std::str::FromStr;
 
@@ -112,12 +112,29 @@ impl SeedStore {
         Ok(xpub)
     }
 
-    /// Return a child public key, generated from the secret entropy (and network).
+    /// Return a child address, generated from the secret entropy (and network).
+    /// Standard P2WPKH address type is used.
+    /// Standard BIP84 derivation path is used, with the last two indices provided.
+    /// [`index4`] The but-last index (4th, change) of the derivation path, usually 0.
+    /// [`index5`] The last index (5th, account) of the derivation path.
+    pub fn get_child_address(&self, index4: u32, index5: u32) -> Result<String, String> {
+        let derivation = format!(
+            "{}/{}/{}",
+            self.default_account_derivation_path(),
+            index4,
+            index5
+        );
+        self.get_child_address_derivation(&derivation)
+    }
+
+    /// Return a child address with arbitrary derivation,
+    /// generated from the secret entropy (and network).
+    /// Standard P2WPKH address type is used.
     /// [`derivation`] The derivation path to use, eg. "m/84'/0'/0'/0/11"
-    pub fn get_child_public_key_derivation(&self, derivation: &str) -> Result<PublicKey, String> {
-        let pubkey = self.secretstore.processed_secret_data(|entropy| {
-            self.get_child_public_key_intern(entropy, derivation)
-        })?;
+    pub fn get_child_address_derivation(&self, derivation: &str) -> Result<String, String> {
+        let pubkey = self
+            .secretstore
+            .processed_secret_data(|entropy| self.get_child_address_intern(entropy, derivation))?;
         Ok(pubkey)
     }
 
@@ -133,6 +150,15 @@ impl SeedStore {
             index5
         );
         self.get_child_public_key_derivation(&derivation)
+    }
+
+    /// Return a child public key with arbitrary derivation, generated from the secret entropy (and network).
+    /// [`derivation`] The derivation path to use, eg. "m/84'/0'/0'/0/11"
+    pub fn get_child_public_key_derivation(&self, derivation: &str) -> Result<PublicKey, String> {
+        let pubkey = self.secretstore.processed_secret_data(|entropy| {
+            self.get_child_public_key_intern(entropy, derivation)
+        })?;
+        Ok(pubkey)
     }
 
     /// Return a child PRIVATE key, generated from the secret entropy (and network).
@@ -201,13 +227,27 @@ impl SeedStore {
         Ok(keypair)
     }
 
+    fn get_child_address_intern(
+        &self,
+        entropy: &Vec<u8>,
+        derivation: &str,
+    ) -> Result<String, String> {
+        let public_key = self
+            .get_child_keypair_intern(entropy, &derivation)?
+            .public_key();
+        let address = Address::p2wpkh(&CompressedPublicKey(public_key), self.network_as_enum());
+        Ok(address.to_string())
+    }
+
     fn get_child_public_key_intern(
         &self,
         entropy: &Vec<u8>,
         derivation: &str,
     ) -> Result<PublicKey, String> {
-        let keypair = self.get_child_keypair_intern(entropy, &derivation)?;
-        Ok(keypair.public_key())
+        let public_key = self
+            .get_child_keypair_intern(entropy, &derivation)?
+            .public_key();
+        Ok(public_key)
     }
 
     fn get_child_private_key_intern(
@@ -215,8 +255,10 @@ impl SeedStore {
         entropy: &Vec<u8>,
         derivation: &str,
     ) -> Result<SecretKey, String> {
-        let keypair = self.get_child_keypair_intern(entropy, &derivation)?;
-        Ok(keypair.secret_key())
+        let secret_key = self
+            .get_child_keypair_intern(entropy, &derivation)?
+            .secret_key();
+        Ok(secret_key)
     }
 }
 

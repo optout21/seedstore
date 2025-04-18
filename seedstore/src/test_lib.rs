@@ -21,16 +21,20 @@ fn create_from_data() {
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
     assert_eq!(
+        store.get_child_address(0, 0).unwrap(),
+        "bc1q98wufxmtfh5qlk7fe5dzy2z8cflvqjysrh4fx2"
+    );
+    assert_eq!(
+        store.get_child_address(0, 1).unwrap(),
+        "bc1q2acf8wdcjkskt5ug24szudejaqv6wgu3jzuw02"
+    );
+    assert_eq!(
+        store.get_child_address(1, 0).unwrap(),
+        "bc1q0rent4vu9eyqw3g0me4h0lgcply7j23yelnx6k"
+    );
+    assert_eq!(
         store.get_child_public_key(0, 0).unwrap().to_string(),
         "032814221178177cb5ac81ae0ffa3be2e3c936503d6927050af739a41311f3821e"
-    );
-    assert_eq!(
-        store.get_child_public_key(0, 1).unwrap().to_string(),
-        "033107250a6f0a7acf9c33436c43310467d69c858f1cf8c7a5ddc5283ae53d44c8"
-    );
-    assert_eq!(
-        store.get_child_public_key(1, 0).unwrap().to_string(),
-        "031e6032dd2fbaa00a1992ef87f17e50b25c388aa91f7277fe6f1e898e2ceecccb"
     );
 
     // uncomment for obtaining actual output
@@ -46,6 +50,10 @@ fn create_from_data_net_3() {
 
     assert_eq!(store.network(), 3);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB2);
+    assert_eq!(
+        store.get_child_address(0, 0).unwrap(),
+        "tb1q6p8uqhn8rp5wrclfhh7a5q350zravflrd79rwg"
+    );
 }
 
 #[test]
@@ -57,6 +65,10 @@ fn create_from_payload_const() {
 
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
+    assert_eq!(
+        store.get_child_address(0, 0).unwrap(),
+        "bc1q98wufxmtfh5qlk7fe5dzy2z8cflvqjysrh4fx2"
+    );
 }
 
 fn get_temp_file_name() -> String {
