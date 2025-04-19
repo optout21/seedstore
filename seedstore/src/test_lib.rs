@@ -3,6 +3,7 @@ use hex_conservative::{DisplayHex, FromHex};
 use rand::Rng;
 use std::env::temp_dir;
 use std::fs;
+use zeroize::Zeroize;
 
 const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
@@ -16,7 +17,7 @@ const XPUB2: &str = "tpubDCRo9GmRAvEWANJ5iSfMEqPoq3uYvjBPAAjrDj5iQMxAq7DCs5orw7m
 fn create_from_data() {
     let network = 0u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let store = SeedStoreCreator::new_from_data(&entropy, network).unwrap();
+    let mut store = SeedStoreCreator::new_from_data(&entropy, network).unwrap();
 
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
@@ -39,7 +40,9 @@ fn create_from_data() {
 
     // uncomment for obtaining actual output
     // let payload = store.secretstore.assemble_encrypted_payload(&PASSWORD1).unwrap();
-    // assert_eq!(payload.to_lower_hex_string(), "123");
+    // assert_eq!(payload.to_lower_hex_string(), "_placeholder_");
+
+    store.zeroize();
 }
 
 #[test]
@@ -61,7 +64,7 @@ fn create_from_payload_const() {
     let payload = Vec::from_hex(PAYLOAD1).unwrap();
     let password = PASSWORD1.to_owned();
 
-    let store = SeedStore::new_from_payload(&payload, &password).unwrap();
+    let mut store = SeedStore::new_from_payload(&payload, &password).unwrap();
 
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
@@ -69,6 +72,8 @@ fn create_from_payload_const() {
         store.get_child_address(0, 0).unwrap(),
         "bc1q98wufxmtfh5qlk7fe5dzy2z8cflvqjysrh4fx2"
     );
+
+    store.zeroize();
 }
 
 fn get_temp_file_name() -> String {

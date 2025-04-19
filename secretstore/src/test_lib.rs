@@ -3,6 +3,7 @@ use hex_conservative::{DisplayHex, FromHex};
 use rand::Rng;
 use std::env::temp_dir;
 use std::fs;
+use zeroize::Zeroize;
 
 const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
@@ -35,14 +36,16 @@ fn create_payload_from_data(
 fn create_from_data() {
     let nonsecret_data = Vec::from_hex(NONSECRET_DATA1).unwrap();
     let secret_data = Vec::from_hex(SECRET_DATA1).unwrap();
-    let store = create_store_from_data(nonsecret_data.clone(), &secret_data);
+    let mut store = create_store_from_data(nonsecret_data.clone(), &secret_data);
 
     assert_eq!(store.nonsecret_data().clone(), nonsecret_data);
     assert_eq!(store.secret_data().unwrap().clone(), secret_data);
 
     // uncomment for obtaining actual output
     // let payload = store.assemble_encrypted_payload(&PASSWORD1).unwrap();
-    // assert_eq!(payload.to_lower_hex_string(), "123");
+    // assert_eq!(payload.to_lower_hex_string(), "_placeholder_");
+
+    store.zeroize();
 }
 
 #[test]
@@ -50,7 +53,7 @@ fn create_from_payload_const() {
     let payload = Vec::from_hex(PAYLOAD1).unwrap();
     let password = PASSWORD1.to_owned();
 
-    let store = create_store_from_payload(&payload, &password);
+    let mut store = create_store_from_payload(&payload, &password);
 
     assert_eq!(
         store.nonsecret_data().to_lower_hex_string(),
@@ -68,6 +71,8 @@ fn create_from_payload_const() {
             .to_lower_hex_string(),
         PAYLOAD1
     );
+
+    store.zeroize();
 }
 
 #[test]
@@ -77,7 +82,7 @@ fn create_from_payload_generated() {
     let password = PASSWORD1.to_owned();
     let payload = create_payload_from_data(nonsecret_data.clone(), &secret_data, &password);
 
-    let store = create_store_from_payload(&payload, &password);
+    let mut store = create_store_from_payload(&payload, &password);
 
     assert_eq!(store.nonsecret_data().clone(), nonsecret_data);
     assert_eq!(store.secret_data().unwrap().clone(), secret_data);
@@ -86,6 +91,8 @@ fn create_from_payload_generated() {
     let payload = store.assemble_encrypted_payload(&password).unwrap();
     assert_eq!(payload.len(), 38);
     assert_eq!(payload[0..8].to_lower_hex_string(), "5353010301020301");
+
+    store.zeroize();
 }
 
 #[test]
@@ -95,7 +102,7 @@ fn create_from_payload_different_pw() {
     let password = PASSWORD2.to_owned();
     let payload = create_payload_from_data(nonsecret_data.clone(), &secret_data, &password);
 
-    let store = create_store_from_payload(&payload, &password);
+    let mut store = create_store_from_payload(&payload, &password);
 
     assert_eq!(store.nonsecret_data().clone(), nonsecret_data);
     assert_eq!(store.secret_data().unwrap().clone(), secret_data);
@@ -104,6 +111,8 @@ fn create_from_payload_different_pw() {
     let payload = store.assemble_encrypted_payload(&password).unwrap();
     assert_eq!(payload.len(), 38);
     assert_eq!(payload[0..8].to_lower_hex_string(), "5353010301020301");
+
+    store.zeroize();
 }
 
 #[test]

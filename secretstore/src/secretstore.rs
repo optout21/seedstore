@@ -169,6 +169,16 @@ impl SecretStore {
     }
 }
 
+impl Zeroize for SecretStore {
+    fn zeroize(&mut self) {
+        self.scrambled_secret_data.zeroize();
+        self.encryption_salt.zeroize();
+        self.ephemeral_scrambling_key.zeroize();
+        self.nonsecret_data.zeroize();
+        self.format_version = FORMAT_VERSION_OLDEST;
+    }
+}
+
 impl SecretStoreCreator {
     /// Create a new store instance from given contained data.
     /// The store can be written out to file using [`write_to_file`]

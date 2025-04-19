@@ -273,6 +273,13 @@ impl SeedStore {
     }
 }
 
+impl Zeroize for SeedStore {
+    fn zeroize(&mut self) {
+        self.secretstore.zeroize();
+        self.secp = Secp256k1::new();
+    }
+}
+
 impl SeedStoreCreator {
     /// Create a new store instance from given secret entropy bytes and network byte.
     /// The store can be written out to file using [`write_to_file`]
