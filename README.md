@@ -29,8 +29,9 @@ Steps to mitigate the risks:
 - use zeroize
 - direct access to secrets available only in separate feature
 - enforce restricted permissions on the file
-- use diffrerent encryption (chacha20)
+- use diffrerent encryption (chacha20), or at least scrypt (with many rounds) to get key
 - version 1.0, with format guarantee
+- add support for ECDSA signing
 
 
 ## Usage Example

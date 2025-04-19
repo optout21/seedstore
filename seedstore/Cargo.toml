@@ -6,9 +6,10 @@ license = "MIT"
 edition = "2021"
 
 [dependencies]
-bip39 = "2.1.0"
+bip39 = { version = "2.1.0", features = ["zeroize"] }
 bitcoin = "0.32.5"
 secretstore = { version = "0.2.1", path = "../secretstore" }
+zeroize = "1.8.1"
 
 [dev-dependencies]
 hex-conservative = "0.3.0"

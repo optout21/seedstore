@@ -5,6 +5,7 @@ use bitcoin::secp256k1::{All, PublicKey, SecretKey};
 use bitcoin::{Address, CompressedPublicKey, Network, NetworkKind};
 use secretstore::{SecretStore, SecretStoreCreator};
 use std::str::FromStr;
+use zeroize::Zeroize;
 
 /// Store a secret data in an encrypred file.
 /// Also store some nonsecret data.
@@ -120,7 +121,7 @@ impl SeedStore {
     pub fn get_child_address(&self, index4: u32, index5: u32) -> Result<String, String> {
         let derivation = format!(
             "{}/{}/{}",
-            self.default_account_derivation_path(),
+            self.default_account_derivation_path3(),
             index4,
             index5
         );
@@ -145,7 +146,7 @@ impl SeedStore {
     pub fn get_child_public_key(&self, index4: u32, index5: u32) -> Result<PublicKey, String> {
         let derivation = format!(
             "{}/{}/{}",
-            self.default_account_derivation_path(),
+            self.default_account_derivation_path3(),
             index4,
             index5
         );
@@ -171,48 +172,54 @@ impl SeedStore {
         Ok(privkey)
     }
 
-    fn default_account_derivation_path(&self) -> String {
+    fn default_account_derivation_path3(&self) -> String {
         match self.network() {
             0 => "m/84'/0'/0'".to_string(),
             _ => "m/84'/1'/0'".to_string(),
         }
     }
 
+    /// Caution: secret material is taken, processed and returned
     fn seed_from_entropy(&self, entropy: &Vec<u8>) -> Result<[u8; 64], String> {
-        let mnemo = Mnemonic::from_entropy(entropy)
+        let mut mnemo = Mnemonic::from_entropy(entropy)
             .map_err(|e| format!("Could not process entropy {}", e.to_string()))?;
         let seed = mnemo.to_seed_normalized("");
+        mnemo.zeroize();
         Ok(seed)
     }
 
+    /// Caution: secret material is taken, processed and returned
     fn xpriv3_from_entropy(&self, entropy: &Vec<u8>) -> Result<Xpriv, String> {
-        let seed = self.seed_from_entropy(entropy)?;
+        let mut seed = self.seed_from_entropy(entropy)?;
         let xpriv = Xpriv::new_master(
             <Network as Into<NetworkKind>>::into(self.network_as_enum()),
             &seed,
         )
         .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
-        let derivation = self.default_account_derivation_path();
+        let derivation = self.default_account_derivation_path3();
         let derivation_path_3 = DerivationPath::from_str(&derivation)
             .map_err(|e| format!("Internal derivation conversion error {}", e))?;
         let xpriv_level_3 = xpriv
             .derive_priv(&self.secp, &derivation_path_3)
             .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
+        seed.zeroize();
         Ok(xpriv_level_3)
     }
 
+    /// Caution: secret material is taken and processed
     fn xpub3_from_entropy(&self, entropy: &Vec<u8>) -> Result<Xpub, String> {
         let xpriv_level_3 = self.xpriv3_from_entropy(entropy)?;
         let xpub_level_3 = Xpub::from_priv(&self.secp, &xpriv_level_3);
         Ok(xpub_level_3)
     }
 
+    /// Caution: secret material is taken, processed and returned
     fn get_child_keypair_intern(
         &self,
         entropy: &Vec<u8>,
         derivation_path: &str,
     ) -> Result<Keypair, String> {
-        let seed = self.seed_from_entropy(entropy)?;
+        let mut seed = self.seed_from_entropy(entropy)?;
         let xpriv = Xpriv::new_master(
             <Network as Into<NetworkKind>>::into(self.network_as_enum()),
             &seed,
@@ -224,9 +231,11 @@ impl SeedStore {
             .derive_priv(&self.secp, &derivation)
             .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
         let keypair = child_xpriv.to_keypair(&self.secp);
+        seed.zeroize();
         Ok(keypair)
     }
 
+    /// Caution: secret material is taken and processed
     fn get_child_address_intern(
         &self,
         entropy: &Vec<u8>,
@@ -239,6 +248,7 @@ impl SeedStore {
         Ok(address.to_string())
     }
 
+    /// Caution: secret material is taken and processed
     fn get_child_public_key_intern(
         &self,
         entropy: &Vec<u8>,
@@ -250,6 +260,7 @@ impl SeedStore {
         Ok(public_key)
     }
 
+    /// Caution: secret material is taken, processed and returned
     fn get_child_private_key_intern(
         &self,
         entropy: &Vec<u8>,
@@ -265,6 +276,7 @@ impl SeedStore {
 impl SeedStoreCreator {
     /// Create a new store instance from given secret entropy bytes and network byte.
     /// The store can be written out to file using [`write_to_file`]
+    /// Caution: unencrypted secret data is taken
     pub fn new_from_data(entropy: &Vec<u8>, network: u8) -> Result<SeedStore, String> {
         let entropy_checksum = checksum_of_entropy(entropy)?;
         let nonsecret_data = vec![network, entropy_checksum];

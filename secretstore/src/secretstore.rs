@@ -3,6 +3,7 @@ use bitcoin_hashes::Sha256d;
 use hex_conservative::{DisplayHex, FromHex};
 use rand_core::{OsRng, RngCore};
 use std::fs;
+use zeroize::Zeroize;
 
 /// Minimum accepted password length
 pub const PASSWORD_MIN_LEN: usize = 7;
@@ -17,18 +18,18 @@ const BYTE_MAX: u8 = 255;
 
 /// Store a secret data in an encrypred file.
 /// Also store some nonsecret data.
-/// Read them, store the secret encrypted with an ephemeral key.
-/// Secret data length can be between 1 and 256 bytes.
-/// Secret data is stored in a fixed byte array, to avoid allocations.
-/// A checksum is also stored, for the whole data.
-/// The encrypted part has no checksum, because if it had, it would be possible
-/// to check if a password decrypts it or not, which helps brute forcing.
+/// Can be loaded from an encrypted file.
+/// The secret is stored in memory scrabmled (using an ephemeral scrambling key).
+/// Secret data length can be between 1 and 65535 bytes.
 pub struct SecretStore {
     format_version: FormatVersion,
-    /// Secret data, encrypted with the ephemeral key, stored on fixed len
+    /// Secret data, scrabmled with the ephemeral key.
     scrambled_secret_data: Vec<u8>,
+    /// The non-secret part of the data
     nonsecret_data: Vec<u8>,
+    /// Salt using for encryption.
     encryption_salt: EncryptionSalt,
+    /// Scrambling key used to scramble the secret data in memory.
     ephemeral_scrambling_key: EncryptionKey,
 }
 
@@ -101,6 +102,7 @@ impl SecretStore {
         let mut decrypted = self.scrambled_secret_data.clone();
         let _res = descramble_secret(&mut decrypted, &self.ephemeral_scrambling_key)?;
         let res = f(&decrypted)?;
+        decrypted.zeroize();
         Ok(res)
     }
 
