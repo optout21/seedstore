@@ -22,13 +22,16 @@ const BYTE_MAX: u8 = 255;
 /// The secret is stored in memory scrabmled (using an ephemeral scrambling key).
 /// Secret data length can be between 1 and 65535 bytes.
 pub struct SecretStore {
+    /// The format version used.
     format_version: FormatVersion,
+    /// The encryption version used.
+    encryption_version: EncryptionVersion,
     /// Secret data, scrabmled with the ephemeral key.
     scrambled_secret_data: Vec<u8>,
     /// The non-secret part of the data
     nonsecret_data: Vec<u8>,
-    /// Salt using for encryption.
-    encryption_salt: EncryptionSalt,
+    /// Auxiliary encryption data, such as salt using for encryption.
+    encryption_aux_data: EncryptionAuxData,
     /// Scrambling key used to scramble the secret data in memory.
     ephemeral_scrambling_key: EncryptionKey,
 }
@@ -40,6 +43,19 @@ pub struct SecretStoreCreator {}
 #[derive(Clone, Copy)]
 enum FormatVersion {
     One = 1,
+}
+
+/// Encryption versions
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum EncryptionVersion {
+    /// V1: XOR encryption
+    V1Xor = 1,
+}
+
+/// Version-dependent auxiliary encryption data
+enum EncryptionAuxData {
+    /// V1 XOR encryption: encrypted data plus encryption salt
+    V1Xor(EncryptionSalt),
 }
 
 const FORMAT_VERSION_LATEST: FormatVersion = FormatVersion::One;
@@ -61,20 +77,27 @@ impl SecretStore {
         secret_payload: &Vec<u8>,
         encryption_password: &str,
     ) -> Result<Self, String> {
-        let (format_version, nonsecret_data, mut encrypted_secret_data, encryption_salt) =
-            parse_payload(&secret_payload)?;
+        let (
+            format_version,
+            nonsecret_data,
+            encryption_version,
+            mut encrypted_secret_data,
+            encryption_aux_data,
+        ) = parse_payload(&secret_payload)?;
         let ephemeral_scrambling_key = Self::generate_scrambling_key();
         let _res = scramble_encrypted_secret_data(
+            encryption_version,
             &mut encrypted_secret_data,
             encryption_password,
-            &encryption_salt,
+            &encryption_aux_data,
             &ephemeral_scrambling_key,
         )?;
         Ok(Self {
             format_version,
+            encryption_version,
             scrambled_secret_data: encrypted_secret_data,
             nonsecret_data,
-            encryption_salt,
+            encryption_aux_data,
             ephemeral_scrambling_key,
         })
     }
@@ -145,14 +168,16 @@ impl SecretStore {
         let _res = encrypt_scrambled_secret_data(
             &mut encrypted,
             &self.ephemeral_scrambling_key,
+            self.encryption_version,
             encryption_password,
-            &self.encryption_salt,
+            &self.encryption_aux_data,
         )?;
         assemble_payload(
             self.format_version,
             &self.nonsecret_data,
+            self.encryption_version,
             &encrypted,
-            &self.encryption_salt,
+            &self.encryption_aux_data,
         )
     }
 
@@ -172,7 +197,7 @@ impl SecretStore {
 impl Zeroize for SecretStore {
     fn zeroize(&mut self) {
         self.scrambled_secret_data.zeroize();
-        self.encryption_salt.zeroize();
+        self.encryption_aux_data.zeroize();
         self.ephemeral_scrambling_key.zeroize();
         self.nonsecret_data.zeroize();
         self.format_version = FORMAT_VERSION_OLDEST;
@@ -214,10 +239,11 @@ impl SecretStoreCreator {
         let _res = scramble_secret(&mut scrambled_secret_data, &ephemeral_scrambling_key)?;
         Ok(SecretStore {
             format_version,
+            encryption_version: EncryptionVersion::V1Xor,
             scrambled_secret_data,
             nonsecret_data,
             ephemeral_scrambling_key,
-            encryption_salt,
+            encryption_aux_data: EncryptionAuxData::V1Xor(encryption_salt),
         })
     }
 
@@ -234,11 +260,51 @@ impl SecretStoreCreator {
 }
 
 impl FormatVersion {
-    fn from_u8(byte: u8) -> Result<FormatVersion, String> {
+    fn from_u8(byte: u8) -> Result<Self, String> {
         match byte {
-            1 => Ok(FormatVersion::One),
-            _ => Err(format!("Invalid format {}", byte)),
+            1 => Ok(Self::One),
+            _ => Err(format!("Invalid format version {}", byte)),
         }
+    }
+}
+
+impl EncryptionVersion {
+    fn from_u8(byte: u8) -> Result<Self, String> {
+        match byte {
+            1 => Ok(Self::V1Xor),
+            _ => Err(format!("Invalid encryption version {}", byte)),
+        }
+    }
+}
+
+impl Zeroize for EncryptionAuxData {
+    fn zeroize(&mut self) {
+        match self {
+            Self::V1Xor(ref mut salt) => {
+                salt.zeroize();
+            }
+        }
+    }
+}
+
+impl EncryptionAuxData {
+    /// Return the `EncryptionVersion` matching this aux data.
+    fn version(&self) -> Result<EncryptionVersion, String> {
+        match &self {
+            Self::V1Xor(_) => Ok(EncryptionVersion::V1Xor),
+        }
+    }
+
+    /// Verify that the given encryption version matches this aux data.
+    fn check_version(&self, encryption_version: EncryptionVersion) -> Result<(), String> {
+        let expected_version = self.version()?;
+        if encryption_version != expected_version {
+            return Err(format!(
+                "Invalid encryption version, {:?} vs {:?}",
+                encryption_version, expected_version
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -279,9 +345,19 @@ fn two_bytes_from_u16(s: u16) -> (u8, u8) {
     ((s & 0x00ffu16) as u8, (s >> 8) as u8)
 }
 
+/// Method to parse an encrypted payload.
 fn parse_payload(
     payload: &Vec<u8>,
-) -> Result<(FormatVersion, Vec<u8>, Vec<u8>, EncryptionSalt), String> {
+) -> Result<
+    (
+        FormatVersion,
+        Vec<u8>,
+        EncryptionVersion,
+        Vec<u8>,
+        EncryptionAuxData,
+    ),
+    String,
+> {
     let mut pos: usize = 0;
 
     let _res = verify_payload_len(payload.len(), pos + MAGIC_BYTES_LEN)?;
@@ -295,11 +371,6 @@ fn parse_payload(
     pos += MAGIC_BYTES_LEN;
 
     let format_version_byte = get_next_payload_byte(payload, &mut pos)?;
-    if format_version_byte < FORMAT_VERSION_OLDEST as u8
-        || format_version_byte > FORMAT_VERSION_LATEST as u8
-    {
-        return Err(format!("Invalid format version {}", format_version_byte));
-    }
     let format_version = FormatVersion::from_u8(format_version_byte)?;
 
     let nonsecret_len = get_next_payload_byte(payload, &mut pos)? as usize;
@@ -310,27 +381,15 @@ fn parse_payload(
     pos += nonsecret_len;
 
     let encryption_version_byte = get_next_payload_byte(payload, &mut pos)?;
-    if encryption_version_byte != 1 {
-        return Err(format!(
-            "Invalid encryption version {}",
-            encryption_version_byte
-        ));
-    }
+    let encryption_version = EncryptionVersion::from_u8(encryption_version_byte)?;
 
-    let _res = verify_payload_len(payload.len(), pos + SALT_LEN)?;
-    let encryption_salt_temp = &payload[pos..pos + SALT_LEN];
-    pos += SALT_LEN;
-    debug_assert_eq!(encryption_salt_temp.len(), SALT_LEN);
-    let encryption_salt = <EncryptionSalt>::try_from(encryption_salt_temp)
-        .map_err(|e| format!("Internal salt conversion error {}", e))?;
-
-    let el_b1 = get_next_payload_byte(payload, &mut pos)?;
-    let el_b2 = get_next_payload_byte(payload, &mut pos)?;
-    let encrypted_len = u16_from_two_bytes(el_b1, el_b2) as usize;
-
-    let _res = verify_payload_len(payload.len(), pos + encrypted_len)?;
-    let encrypted_secret_data = payload[pos..pos + encrypted_len].to_vec();
-    pos += encrypted_len;
+    let (encryption_aux_data, encrypted_secret_data) = match encryption_version {
+        EncryptionVersion::V1Xor => {
+            let (encryption_aux_data, encrypted_secret_data) =
+                parse_encrypted_data_v1_xor(payload, &mut pos)?;
+            (encryption_aux_data, encrypted_secret_data)
+        }
+    };
 
     let _res = verify_payload_len(payload.len(), pos + CHECKSUM_LEN)?;
     let checksum_parsed = payload[pos..pos + CHECKSUM_LEN].to_vec();
@@ -353,17 +412,50 @@ fn parse_payload(
     Ok((
         format_version,
         nonsecret_data,
+        encryption_version,
         encrypted_secret_data,
-        encryption_salt,
+        encryption_aux_data,
     ))
 }
 
+fn parse_encrypted_data_v1_xor(
+    payload: &Vec<u8>,
+    pos: &mut usize,
+) -> Result<(EncryptionAuxData, Vec<u8>), String> {
+    let _res = verify_payload_len(payload.len(), *pos + SALT_LEN)?;
+    let encryption_salt_temp = &payload[(*pos)..(*pos + SALT_LEN)];
+    *pos += SALT_LEN;
+    debug_assert_eq!(encryption_salt_temp.len(), SALT_LEN);
+    let encryption_salt = <EncryptionSalt>::try_from(encryption_salt_temp)
+        .map_err(|e| format!("Internal salt conversion error {}", e))?;
+    let encryption_aux_data = EncryptionAuxData::V1Xor(encryption_salt);
+
+    let encrypted_secret_data = parse_encrypted_data(payload, pos)?;
+
+    Ok((encryption_aux_data, encrypted_secret_data))
+}
+
+fn parse_encrypted_data(payload: &Vec<u8>, pos: &mut usize) -> Result<Vec<u8>, String> {
+    let el_b1 = get_next_payload_byte(payload, pos)?;
+    let el_b2 = get_next_payload_byte(payload, pos)?;
+    let encrypted_len = u16_from_two_bytes(el_b1, el_b2) as usize;
+
+    let _res = verify_payload_len(payload.len(), *pos + encrypted_len)?;
+    let encrypted_secret_data = payload[(*pos)..(*pos + encrypted_len)].to_vec();
+    *pos += encrypted_len;
+    Ok(encrypted_secret_data)
+}
+
+/// Method to assemble the encrypted payload.
 fn assemble_payload(
     format_version: FormatVersion,
     nonsecret_data: &Vec<u8>,
+    encryption_version: EncryptionVersion,
     encrypted_secret_data: &Vec<u8>,
-    encryption_salt: &EncryptionSalt,
+    encryption_aux_data: &EncryptionAuxData,
 ) -> Result<Vec<u8>, String> {
+    let _res = encryption_aux_data.check_version(encryption_version)?;
+
     let mut o: Vec<u8> = Vec::with_capacity(256);
     o.extend(Vec::from_hex(MAGIC_BYTES_STR).unwrap());
     let nonsecret_len = nonsecret_data.len();
@@ -381,39 +473,54 @@ fn assemble_payload(
 
     o.extend(nonsecret_data);
 
-    let encryption_version = 1u8;
-    o.push(encryption_version);
+    o.push(encryption_version as u8);
 
-    o.extend(encryption_salt);
-
-    let encrypted_secret_data_len = encrypted_secret_data.len();
-    if encrypted_secret_data_len < SECRET_DATA_MIN_LEN {
-        return Err(format!(
-            "Secret data too short ({} vs {})",
-            encrypted_secret_data_len, SECRET_DATA_MIN_LEN
-        ));
+    match encryption_aux_data {
+        EncryptionAuxData::V1Xor(salt) => {
+            let _res = assemble_encrypted_data_v1_xor(&mut o, salt, encrypted_secret_data)?;
+        }
     }
-    if encrypted_secret_data_len > SECRET_DATA_MAX_LEN {
-        return Err(format!(
-            "Secret data too long ({} vs {})",
-            encrypted_secret_data_len, SECRET_DATA_MAX_LEN
-        ));
-    }
-    debug_assert!(
-        encrypted_secret_data_len >= SECRET_DATA_MIN_LEN
-            && encrypted_secret_data_len <= SECRET_DATA_MAX_LEN
-    );
-    let (el_b1, el_b2) = two_bytes_from_u16(encrypted_secret_data_len as u16);
-    o.push(el_b1);
-    o.push(el_b2);
-
-    o.extend(encrypted_secret_data);
 
     // compute and add checksum
     let checksum = checksum_of_payload(&o)?;
     o.extend(&checksum);
 
     Ok(o)
+}
+
+fn assemble_encrypted_data_v1_xor(
+    o: &mut Vec<u8>,
+    salt: &EncryptionSalt,
+    encrypted_secret_data: &Vec<u8>,
+) -> Result<(), String> {
+    o.extend(salt);
+    assemble_encrypted_data(o, encrypted_secret_data)
+}
+
+fn assemble_encrypted_data(o: &mut Vec<u8>, encrypted_secret_data: &Vec<u8>) -> Result<(), String> {
+    let encrypted_data_len = encrypted_secret_data.len();
+    if encrypted_data_len < SECRET_DATA_MIN_LEN {
+        return Err(format!(
+            "Secret data too short ({} vs {})",
+            encrypted_data_len, SECRET_DATA_MIN_LEN
+        ));
+    }
+    if encrypted_data_len > SECRET_DATA_MAX_LEN {
+        return Err(format!(
+            "Secret data too long ({} vs {})",
+            encrypted_data_len, SECRET_DATA_MAX_LEN
+        ));
+    }
+    debug_assert!(
+        encrypted_data_len >= SECRET_DATA_MIN_LEN && encrypted_data_len <= SECRET_DATA_MAX_LEN
+    );
+    let (el_b1, el_b2) = two_bytes_from_u16(encrypted_data_len as u16);
+    o.push(el_b1);
+    o.push(el_b2);
+
+    o.extend(encrypted_secret_data);
+
+    Ok(())
 }
 
 /// Descramble scrambled secret, in-place.
@@ -439,15 +546,21 @@ fn scramble_secret(
 /// Take encrypted secret, and scramble it.
 /// Caution: unencrypted secret is available internally for a short time.
 fn scramble_encrypted_secret_data(
+    encryption_version: EncryptionVersion,
     encrypted: &mut Vec<u8>,
     decryption_password: &str,
-    encryption_salt: &EncryptionSalt,
+    aux_data: &EncryptionAuxData,
     scrambling_key: &EncryptionKey,
 ) -> Result<(), String> {
     debug_assert!(encrypted.len() <= SECRET_DATA_MAX_LEN);
-    let _res = XorEncryptor::decrypt(encrypted, decryption_password, encryption_salt)?;
-    let _res = scramble_secret(encrypted, scrambling_key)?;
-    Ok(())
+    let _res = aux_data.check_version(encryption_version)?;
+    match aux_data {
+        EncryptionAuxData::V1Xor(salt) => {
+            let _res = XorEncryptor::decrypt(encrypted, decryption_password, salt)?;
+            let _res = scramble_secret(encrypted, scrambling_key)?;
+            Ok(())
+        }
+    }
 }
 
 fn validate_password(encryption_password: &str) -> Result<(), String> {
@@ -466,13 +579,19 @@ fn validate_password(encryption_password: &str) -> Result<(), String> {
 fn encrypt_scrambled_secret_data(
     scrambled: &mut Vec<u8>,
     scrambling_key: &EncryptionKey,
+    encryption_version: EncryptionVersion,
     encryption_password: &str,
-    salt: &EncryptionSalt,
+    aux_data: &EncryptionAuxData,
 ) -> Result<(), String> {
     let _res = validate_password(encryption_password)?;
     let _res = descramble_secret(scrambled, scrambling_key)?;
-    let _res = XorEncryptor::encrypt(scrambled, encryption_password, salt);
-    Ok(())
+    let _res = aux_data.check_version(encryption_version)?;
+    match aux_data {
+        EncryptionAuxData::V1Xor(salt) => {
+            let _res = XorEncryptor::encrypt(scrambled, encryption_password, salt);
+            Ok(())
+        }
+    }
 }
 
 fn checksum_of_payload(payload: &[u8]) -> Result<Vec<u8>, String> {

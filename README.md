@@ -26,7 +26,6 @@ Steps to mitigate the risks:
 
 ## TODO
 
-- use zeroize
 - direct access to secrets available only in separate feature
 - enforce restricted permissions on the file
 - use diffrerent encryption (chacha20), or at least scrypt (with many rounds) to get key
