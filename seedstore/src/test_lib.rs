@@ -1,4 +1,4 @@
-use crate::{SeedStore, SeedStoreCreator};
+use crate::{ChildSpecifier, SeedStore, SeedStoreCreator};
 use hex_conservative::{DisplayHex, FromHex};
 use rand::Rng;
 use std::env::temp_dir;
@@ -22,19 +22,28 @@ fn create_from_data() {
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
     assert_eq!(
-        store.get_child_address(0, 0).unwrap(),
+        store
+            .get_child_address(&ChildSpecifier::Indices3and4(0, 0))
+            .unwrap(),
         "bc1q98wufxmtfh5qlk7fe5dzy2z8cflvqjysrh4fx2"
     );
     assert_eq!(
-        store.get_child_address(0, 1).unwrap(),
+        store
+            .get_child_address(&ChildSpecifier::Indices3and4(0, 1))
+            .unwrap(),
         "bc1q2acf8wdcjkskt5ug24szudejaqv6wgu3jzuw02"
     );
     assert_eq!(
-        store.get_child_address(1, 0).unwrap(),
+        store
+            .get_child_address(&ChildSpecifier::Indices3and4(1, 0))
+            .unwrap(),
         "bc1q0rent4vu9eyqw3g0me4h0lgcply7j23yelnx6k"
     );
     assert_eq!(
-        store.get_child_public_key(0, 0).unwrap().to_string(),
+        store
+            .get_child_public_key(&ChildSpecifier::Indices3and4(0, 0))
+            .unwrap()
+            .to_string(),
         "032814221178177cb5ac81ae0ffa3be2e3c936503d6927050af739a41311f3821e"
     );
 
@@ -54,7 +63,9 @@ fn create_from_data_net_3() {
     assert_eq!(store.network(), 3);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB2);
     assert_eq!(
-        store.get_child_address(0, 0).unwrap(),
+        store
+            .get_child_address(&ChildSpecifier::Indices3and4(0, 0))
+            .unwrap(),
         "tb1q6p8uqhn8rp5wrclfhh7a5q350zravflrd79rwg"
     );
 }
@@ -69,7 +80,9 @@ fn create_from_payload_const() {
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
     assert_eq!(
-        store.get_child_address(0, 0).unwrap(),
+        store
+            .get_child_address(&ChildSpecifier::Indices3and4(0, 0))
+            .unwrap(),
         "bc1q98wufxmtfh5qlk7fe5dzy2z8cflvqjysrh4fx2"
     );
 

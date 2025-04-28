@@ -15,4 +15,4 @@ mod seedstore;
 mod test_lib;
 
 // re-exports
-pub use crate::seedstore::{SeedStore, SeedStoreCreator};
+pub use crate::seedstore::{ChildSpecifier, SeedStore, SeedStoreCreator};

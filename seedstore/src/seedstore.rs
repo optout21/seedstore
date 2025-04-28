@@ -24,6 +24,19 @@ pub struct SeedStore {
 /// Should be used only by the utility that creates the encrypted file.
 pub struct SeedStoreCreator {}
 
+/// Various ways to specify a child, e.g. by index or derivation path.
+pub enum ChildSpecifier {
+    /// Specify by the 4th (last, 'account') index (non-hardened) of the BIP84 derivation path;
+    /// corresponds to "m/84'/<net>'/0'/0/<idx>"
+    IndexAccount(u32),
+    /// Specify by index, specifying the 3rd ('change') and 4th ('account') indices
+    /// (non-hardened) of the BIP84 derivation path;
+    /// corresponds to "m/84'/<net>'/0'/<idx3>/<idx4>"
+    Indices3and4(u32, u32),
+    /// Specify by full derivation path (as string), such as "m/84'/0'/0'/1/19"
+    Derivation(String),
+}
+
 impl SeedStore {
     /// Load the secret from a password-protected secret file.
     pub fn new_from_encrypted_file(
@@ -105,7 +118,7 @@ impl SeedStore {
     }
 
     /// Accessor for the XPUB, generated from the secret entropy (and network).
-    /// Standard level-3 XPub is returned, using standaard BIP84 derivation path (ie. "m/84'/x'/0'").
+    /// Standard level-3 XPub is returned, using standaard BIP84 derivation path (ie. "m/84'/<net>'/0'").
     pub fn get_xpub(&self) -> Result<Xpub, String> {
         let xpub = self
             .secretstore
@@ -115,68 +128,40 @@ impl SeedStore {
 
     /// Return a child address, generated from the secret entropy (and network).
     /// Standard P2WPKH address type is used.
-    /// Standard BIP84 derivation path is used, with the last two indices provided.
-    /// [`index4`] The but-last index (4th, change) of the derivation path, usually 0.
-    /// [`index5`] The last index (5th, account) of the derivation path.
-    pub fn get_child_address(&self, index4: u32, index5: u32) -> Result<String, String> {
-        let derivation = format!(
-            "{}/{}/{}",
-            self.default_account_derivation_path3(),
-            index4,
-            index5
-        );
-        self.get_child_address_derivation(&derivation)
-    }
-
-    /// Return a child address with arbitrary derivation,
-    /// generated from the secret entropy (and network).
-    /// Standard P2WPKH address type is used.
-    /// [`derivation`] The derivation path to use, eg. "m/84'/0'/0'/0/11"
-    pub fn get_child_address_derivation(&self, derivation: &str) -> Result<String, String> {
+    /// The child can be specified by index or derivation, see [`ChildSpecifier`]
+    pub fn get_child_address(&self, child_specifier: &ChildSpecifier) -> Result<String, String> {
+        let derivation = child_specifier.derivation_path(self.network())?;
         let pubkey = self
             .secretstore
-            .processed_secret_data(|entropy| self.get_child_address_intern(entropy, derivation))?;
+            .processed_secret_data(|entropy| self.get_child_address_intern(entropy, &derivation))?;
         Ok(pubkey)
     }
 
     /// Return a child public key, generated from the secret entropy (and network).
-    /// Standard BIP84 derivation path is used, with the last two indices provided.
-    /// [`index4`] The but-last index (4th, change) of the derivation path, usually 0.
-    /// [`index5`] The last index (5th, account) of the derivation path.
-    pub fn get_child_public_key(&self, index4: u32, index5: u32) -> Result<PublicKey, String> {
-        let derivation = format!(
-            "{}/{}/{}",
-            self.default_account_derivation_path3(),
-            index4,
-            index5
-        );
-        self.get_child_public_key_derivation(&derivation)
-    }
-
-    /// Return a child public key with arbitrary derivation, generated from the secret entropy (and network).
-    /// [`derivation`] The derivation path to use, eg. "m/84'/0'/0'/0/11"
-    pub fn get_child_public_key_derivation(&self, derivation: &str) -> Result<PublicKey, String> {
+    /// The child can be specified by index or derivation, see [`ChildSpecifier`]
+    pub fn get_child_public_key(
+        &self,
+        child_specifier: &ChildSpecifier,
+    ) -> Result<PublicKey, String> {
+        let derivation = child_specifier.derivation_path(self.network())?;
         let pubkey = self.secretstore.processed_secret_data(|entropy| {
-            self.get_child_public_key_intern(entropy, derivation)
+            self.get_child_public_key_intern(entropy, &derivation)
         })?;
         Ok(pubkey)
     }
 
     /// Return a child PRIVATE key, generated from the secret entropy (and network).
     /// Caution: partial unencrypted secret is returned in copy!
-    /// [`derivation`] The derivation path to use, eg. "m/84'/0'/0'/0/11"
-    pub fn get_child_private_key_derivation(&self, derivation: &str) -> Result<SecretKey, String> {
+    /// The child can be specified by index or derivation, see [`ChildSpecifier`]
+    pub fn get_child_private_key_derivation(
+        &self,
+        child_specifier: &ChildSpecifier,
+    ) -> Result<SecretKey, String> {
+        let derivation = child_specifier.derivation_path(self.network())?;
         let privkey = self.secretstore.processed_secret_data(|entropy| {
-            self.get_child_private_key_intern(entropy, derivation)
+            self.get_child_private_key_intern(entropy, &derivation)
         })?;
         Ok(privkey)
-    }
-
-    fn default_account_derivation_path3(&self) -> String {
-        match self.network() {
-            0 => "m/84'/0'/0'".to_string(),
-            _ => "m/84'/1'/0'".to_string(),
-        }
     }
 
     /// Caution: secret material is taken, processed and returned
@@ -196,7 +181,7 @@ impl SeedStore {
             &seed,
         )
         .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
-        let derivation = self.default_account_derivation_path3();
+        let derivation = ChildSpecifier::default_account_derivation_path3(self.network());
         let derivation_path_3 = DerivationPath::from_str(&derivation)
             .map_err(|e| format!("Internal derivation conversion error {}", e))?;
         let xpriv_level_3 = xpriv
@@ -217,7 +202,7 @@ impl SeedStore {
     fn get_child_keypair_intern(
         &self,
         entropy: &Vec<u8>,
-        derivation_path: &str,
+        derivation: &DerivationPath,
     ) -> Result<Keypair, String> {
         let mut seed = self.seed_from_entropy(entropy)?;
         let xpriv = Xpriv::new_master(
@@ -225,8 +210,6 @@ impl SeedStore {
             &seed,
         )
         .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
-        let derivation = DerivationPath::from_str(&derivation_path)
-            .map_err(|e| format!("Internal derivation conversion error {}", e))?;
         let child_xpriv = xpriv
             .derive_priv(&self.secp, &derivation)
             .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
@@ -239,7 +222,7 @@ impl SeedStore {
     fn get_child_address_intern(
         &self,
         entropy: &Vec<u8>,
-        derivation: &str,
+        derivation: &DerivationPath,
     ) -> Result<String, String> {
         let public_key = self
             .get_child_keypair_intern(entropy, &derivation)?
@@ -252,10 +235,10 @@ impl SeedStore {
     fn get_child_public_key_intern(
         &self,
         entropy: &Vec<u8>,
-        derivation: &str,
+        derivation: &DerivationPath,
     ) -> Result<PublicKey, String> {
         let public_key = self
-            .get_child_keypair_intern(entropy, &derivation)?
+            .get_child_keypair_intern(entropy, derivation)?
             .public_key();
         Ok(public_key)
     }
@@ -264,10 +247,10 @@ impl SeedStore {
     fn get_child_private_key_intern(
         &self,
         entropy: &Vec<u8>,
-        derivation: &str,
+        derivation: &DerivationPath,
     ) -> Result<SecretKey, String> {
         let secret_key = self
-            .get_child_keypair_intern(entropy, &derivation)?
+            .get_child_keypair_intern(entropy, derivation)?
             .secret_key();
         Ok(secret_key)
     }
@@ -303,6 +286,40 @@ impl SeedStoreCreator {
     }
 }
 
+impl ChildSpecifier {
+    fn derivation_path(&self, network: u8) -> Result<DerivationPath, String> {
+        let derivation_str = match &self {
+            Self::Derivation(derivation_str) => derivation_str.clone(),
+            Self::Indices3and4(i3, i4) => format!(
+                "{}/{}/{}",
+                Self::default_account_derivation_path3(network),
+                i3,
+                i4
+            ),
+            Self::IndexAccount(i4) => format!(
+                "{}/0/{}",
+                Self::default_account_derivation_path3(network),
+                i4
+            ),
+        };
+        let derivation = DerivationPath::from_str(&derivation_str).map_err(|e| {
+            format!(
+                "Derivation parsing error {} {}",
+                derivation_str,
+                e.to_string()
+            )
+        })?;
+        Ok(derivation)
+    }
+
+    fn default_account_derivation_path3(network: u8) -> String {
+        match network {
+            0 => "m/84'/0'/0'".to_string(),
+            _ => "m/84'/1'/0'".to_string(),
+        }
+    }
+}
+
 fn process_compute_checksum(entropy: &Vec<u8>) -> Result<u8, String> {
     let entropy_checksum_computed = checksum_of_entropy(&entropy)?;
     Ok(entropy_checksum_computed)
@@ -313,4 +330,66 @@ fn checksum_of_entropy(entropy: &Vec<u8>) -> Result<u8, String> {
         .map_err(|e| format!("Could not process entropy {}", e.to_string()))?;
     let checksum = mnemo.checksum();
     Ok(checksum)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use bitcoin::bip32::DerivationPath;
+
+    use super::ChildSpecifier;
+
+    #[test]
+    fn test_default_path() {
+        assert_eq!(
+            ChildSpecifier::default_account_derivation_path3(0),
+            "m/84'/0'/0'"
+        );
+        assert_eq!(
+            ChildSpecifier::default_account_derivation_path3(1),
+            "m/84'/1'/0'"
+        );
+        assert_eq!(
+            ChildSpecifier::default_account_derivation_path3(2),
+            "m/84'/1'/0'"
+        );
+    }
+
+    #[test]
+    fn test_derivation() {
+        assert_eq!(
+            ChildSpecifier::Derivation("m/49'/1'/2'/3/4".to_owned())
+                .derivation_path(0)
+                .unwrap(),
+            DerivationPath::from_str("m/49'/1'/2'/3/4").unwrap()
+        );
+        assert_eq!(
+            ChildSpecifier::Indices3and4(1, 4)
+                .derivation_path(0)
+                .unwrap(),
+            DerivationPath::from_str("m/84'/0'/0'/1/4").unwrap()
+        );
+        assert_eq!(
+            ChildSpecifier::Indices3and4(1, 4)
+                .derivation_path(1)
+                .unwrap(),
+            DerivationPath::from_str("m/84'/1'/0'/1/4").unwrap()
+        );
+        assert_eq!(
+            ChildSpecifier::IndexAccount(66).derivation_path(0).unwrap(),
+            DerivationPath::from_str("m/84'/0'/0'/0/66").unwrap()
+        );
+    }
+
+    #[test]
+    fn neg_test_invalid_derivation() {
+        assert_eq!(
+            ChildSpecifier::Derivation("what//deriv/j9".to_owned())
+                .derivation_path(0)
+                .err()
+                .unwrap(),
+            "Derivation parsing error what//deriv/j9 invalid child number format"
+        );
+    }
 }
