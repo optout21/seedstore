@@ -26,15 +26,13 @@ Steps to mitigate the risks:
 
 ## TODO
 
-- no checksum in seedstore, 3 reserved bytes
+- passphrase to the seed ?
 - seedstore get mnemonic
-- keystore for single key
+- implement Drop
 - direct access to secrets available only in separate feature
 - enforce restricted permissions on the file
 - encorce strong password
-- seedstore: enforce valid entropy lengths (12, 15, 18, 21, 24 words)
-- passphrase to the seed ?
-- implement Drop
+- keystore for single key
 - version 1.0, with format guarantee
 - add support for ECDSA signing
 

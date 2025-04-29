@@ -269,7 +269,7 @@ fn read_from_file() {
 }
 
 #[test]
-fn neg_read_from_file_scrypt_wrong_pw_wrong_data() {
+fn neg_read_from_file_scrypt_wrong_pw_wrong_result() {
     let temp_file = get_temp_file_name();
 
     // write constant payload to file
@@ -304,7 +304,7 @@ fn neg_read_from_file_chacha_wrong_pw_decrypt_error() {
 }
 
 #[test]
-fn neg_read_from_file_xor_wrong_pw_wrong_data() {
+fn neg_read_from_file_xor_wrong_pw_wrong_result() {
     let temp_file = get_temp_file_name();
 
     // write constant payload to file
