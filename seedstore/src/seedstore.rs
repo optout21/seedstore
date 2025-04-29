@@ -5,7 +5,7 @@ use bitcoin::secp256k1::{All, PublicKey, SecretKey};
 use bitcoin::{Address, CompressedPublicKey, Network, NetworkKind};
 use secretstore::{SecretStore, SecretStoreCreator};
 use std::str::FromStr;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 const NONSECRET_DATA_LEN: usize = 4;
 
@@ -264,6 +264,8 @@ impl Zeroize for SeedStore {
         self.secp = Secp256k1::new();
     }
 }
+
+impl ZeroizeOnDrop for SeedStore {}
 
 impl SeedStoreCreator {
     /// Create a new store instance from given secret entropy bytes and network byte.

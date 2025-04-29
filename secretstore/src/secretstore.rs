@@ -5,7 +5,7 @@ use crate::encrypt_xor as xor;
 use bitcoin_hashes::Sha256d;
 use hex_conservative::{DisplayHex, FromHex};
 use std::fs;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Minimum accepted password length
 pub const PASSWORD_MIN_LEN: usize = 7;
@@ -177,6 +177,8 @@ impl Zeroize for SecretStore {
         self.format_version = FORMAT_VERSION_OLDEST;
     }
 }
+
+impl ZeroizeOnDrop for SecretStore {}
 
 impl SecretStoreCreator {
     /// Create a new store instance from given contained data.
