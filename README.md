@@ -27,7 +27,6 @@ Steps to mitigate the risks:
 ## TODO
 
 - passphrase to the seed ?
-- implement Drop
 - direct access to secrets available only in separate feature
 - enforce restricted permissions on the file
 - encorce strong password
