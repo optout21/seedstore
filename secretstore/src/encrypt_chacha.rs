@@ -20,7 +20,7 @@ pub(crate) struct ChaChaEncryptor {}
 
 /// Encrypt data using the password, and the provided rounds, salt and nonce.
 /// It is recommend to zeroize() the password after use.
-/// Return: rounds, salt, nonce, encrypted data
+/// Return: encrypted data
 fn encrypt_data(
     data: &Vec<u8>,
     password: &str,
@@ -142,7 +142,6 @@ impl Encryptor for ChaChaEncryptor {
         }
     }
 
-    /// Decrypt some encrypted data using an encryption password and salt
     fn decrypt(
         encrypted_data: &mut Vec<u8>,
         password: &str,
@@ -167,9 +166,7 @@ impl Encryptor for ChaChaEncryptor {
 
 #[cfg(test)]
 mod test {
-    use crate::encrypt_chacha::{
-        decrypt_data, encrypt_data_generated, EncryptionNonce, EncryptionSalt,
-    };
+    use super::{decrypt_data, encrypt_data_generated, EncryptionNonce, EncryptionSalt};
     use hex_conservative::{DisplayHex, FromHex};
 
     const PASSWORD1: &str = "password";

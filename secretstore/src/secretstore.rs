@@ -1,5 +1,6 @@
 use crate::encrypt_chacha as chacha;
 use crate::encrypt_common::{EncryptionAuxData, EncryptionVersion, Encryptor};
+use crate::encrypt_scrypt as scrypt;
 use crate::encrypt_xor as xor;
 use bitcoin_hashes::Sha256d;
 use hex_conservative::{DisplayHex, FromHex};
@@ -206,8 +207,11 @@ impl SecretStoreCreator {
                 SECRET_DATA_MIN_LEN
             ));
         }
-        let encryption_version = EncryptionVersion::V3ChaCha;
-        let encryption_aux_data = chacha::ChaChaEncryptor::generate_aux_data();
+
+        // Use default encryption version
+        let encryption_version = EncryptionVersion::V2Scrypt;
+        let encryption_aux_data = scrypt::ScryptEncryptor::generate_aux_data();
+
         let ephemeral_scrambling_key = xor::generate_key();
         let mut scrambled_secret_data = secret_data.clone();
         let _res = scramble_secret(&mut scrambled_secret_data, &ephemeral_scrambling_key)?;
@@ -320,7 +324,12 @@ fn parse_payload(
     let (encryption_aux_data, encrypted_secret_data) = match encryption_version {
         EncryptionVersion::V3ChaCha => {
             let (encryption_aux_data, encrypted_secret_data) =
-                parse_encrypted_data_v2_chacha(payload, &mut pos)?;
+                parse_encrypted_data_v3_chacha(payload, &mut pos)?;
+            (encryption_aux_data, encrypted_secret_data)
+        }
+        EncryptionVersion::V2Scrypt => {
+            let (encryption_aux_data, encrypted_secret_data) =
+                parse_encrypted_data_v2_scrypt(payload, &mut pos)?;
             (encryption_aux_data, encrypted_secret_data)
         }
         // V1Xor is deprecated, support reading though
@@ -358,7 +367,7 @@ fn parse_payload(
     ))
 }
 
-fn parse_encrypted_data_v2_chacha(
+fn parse_encrypted_data_v3_chacha(
     payload: &Vec<u8>,
     pos: &mut usize,
 ) -> Result<(EncryptionAuxData, Vec<u8>), String> {
@@ -380,6 +389,26 @@ fn parse_encrypted_data_v2_chacha(
 
     let encryption_aux_data =
         EncryptionAuxData::V3ChaCha((rounds, encryption_salt, encryption_nonce));
+
+    let encrypted_secret_data = parse_encrypted_data(payload, pos)?;
+
+    Ok((encryption_aux_data, encrypted_secret_data))
+}
+
+fn parse_encrypted_data_v2_scrypt(
+    payload: &Vec<u8>,
+    pos: &mut usize,
+) -> Result<(EncryptionAuxData, Vec<u8>), String> {
+    let rounds = get_next_payload_byte(payload, pos)?;
+
+    let _res = verify_payload_len(payload.len(), *pos + chacha::SALT_LEN)?;
+    let encryption_salt_temp = &payload[(*pos)..(*pos + crate::encrypt_xor::SALT_LEN)];
+    *pos += chacha::SALT_LEN;
+    debug_assert_eq!(encryption_salt_temp.len(), chacha::SALT_LEN);
+    let encryption_salt = <chacha::EncryptionSalt>::try_from(encryption_salt_temp)
+        .map_err(|e| format!("Internal salt conversion error {}", e))?;
+
+    let encryption_aux_data = EncryptionAuxData::V2Scrypt((rounds, encryption_salt));
 
     let encrypted_secret_data = parse_encrypted_data(payload, pos)?;
 
@@ -445,13 +474,17 @@ fn assemble_payload(
 
     match encryption_aux_data {
         EncryptionAuxData::V3ChaCha((rounds, salt, nonce)) => {
-            let _res = assemble_encrypted_data_v2_chacha(
+            let _res = assemble_encrypted_data_v3_chacha(
                 &mut o,
                 *rounds,
                 salt,
                 nonce,
                 encrypted_secret_data,
             )?;
+        }
+        EncryptionAuxData::V2Scrypt((rounds, salt)) => {
+            let _res =
+                assemble_encrypted_data_v2_scrypt(&mut o, *rounds, salt, encrypted_secret_data)?;
         }
         // V1Xor is DEPRECATED
         EncryptionAuxData::V1Xor(_salt) => {
@@ -466,7 +499,7 @@ fn assemble_payload(
     Ok(o)
 }
 
-fn assemble_encrypted_data_v2_chacha(
+fn assemble_encrypted_data_v3_chacha(
     o: &mut Vec<u8>,
     rounds: u8,
     salt: &chacha::EncryptionSalt,
@@ -476,6 +509,17 @@ fn assemble_encrypted_data_v2_chacha(
     o.push(rounds);
     o.extend(salt);
     o.extend(nonce);
+    assemble_encrypted_data(o, encrypted_secret_data)
+}
+
+fn assemble_encrypted_data_v2_scrypt(
+    o: &mut Vec<u8>,
+    rounds: u8,
+    salt: &chacha::EncryptionSalt,
+    encrypted_secret_data: &Vec<u8>,
+) -> Result<(), String> {
+    o.push(rounds);
+    o.extend(salt);
     assemble_encrypted_data(o, encrypted_secret_data)
 }
 
@@ -552,6 +596,9 @@ fn scramble_encrypted_secret_data(
         EncryptionVersion::V3ChaCha => {
             let _res = chacha::ChaChaEncryptor::decrypt(encrypted, decryption_password, aux_data)?;
         }
+        EncryptionVersion::V2Scrypt => {
+            let _res = scrypt::ScryptEncryptor::decrypt(encrypted, decryption_password, aux_data)?;
+        }
         EncryptionVersion::V1Xor => {
             let _res = xor::XorEncryptor::decrypt(encrypted, decryption_password, aux_data)?;
         }
@@ -592,6 +639,9 @@ fn encrypt_scrambled_secret_data(
     match encryption_version {
         EncryptionVersion::V3ChaCha => {
             let _res = chacha::ChaChaEncryptor::encrypt(scrambled, encryption_password, aux_data)?;
+        }
+        EncryptionVersion::V2Scrypt => {
+            let _res = scrypt::ScryptEncryptor::encrypt(scrambled, encryption_password, aux_data)?;
         }
         EncryptionVersion::V1Xor => {
             return Err("V1Xor is DEPRECATED".to_owned());

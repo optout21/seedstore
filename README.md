@@ -26,10 +26,9 @@ Steps to mitigate the risks:
 
 ## TODO
 
-- V2 scrypt
 - no checksum in seedstore, 3 reserved bytes
 - seedstore get mnemonic
-- keystore for sinle key
+- keystore for single key
 - direct access to secrets available only in separate feature
 - enforce restricted permissions on the file
 - encorce strong password
