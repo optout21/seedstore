@@ -7,9 +7,11 @@ use secretstore::{SecretStore, SecretStoreCreator};
 use std::str::FromStr;
 use zeroize::Zeroize;
 
+const NONSECRET_DATA_LEN: usize = 4;
+
 /// Store a secret BIP32-style entropy in an encrypted file
 /// Can be loaded from an encrypted file.
-/// Additionally store a network type byte,
+/// Additionally store a network type byte, and 3 bytes reserved for later use.
 /// and an entropy checksum (to be able to avoid using wrong entropy due to wrong password).
 /// The secret is stored in memory scrabmled (using an ephemeral scrambling key).
 pub struct SeedStore {
@@ -57,23 +59,14 @@ impl SeedStore {
 
     fn new_from_secretstore(secretstore: SecretStore) -> Result<Self, String> {
         let nonsecret_data = secretstore.nonsecret_data();
-        if nonsecret_data.len() != 2 {
+        if nonsecret_data.len() != NONSECRET_DATA_LEN {
             return Err(format!(
-                "Nonsecret data len should be 2 (was {})",
+                "Nonsecret data len should be {} (was {})",
+                NONSECRET_DATA_LEN,
                 nonsecret_data.len()
             ));
         }
-        debug_assert_eq!(nonsecret_data.len(), 2);
-
-        let entropy_checksum_computed =
-            secretstore.processed_secret_data(process_compute_checksum)?;
-        let entropy_checksum_provided = nonsecret_data[1];
-        if entropy_checksum_computed != entropy_checksum_provided {
-            return Err(format!(
-                "Checksum mismatch ({} vs {}), check the password and the secret file!",
-                entropy_checksum_provided, entropy_checksum_computed
-            ));
-        }
+        debug_assert_eq!(nonsecret_data.len(), NONSECRET_DATA_LEN);
 
         Ok(SeedStore {
             secretstore,
@@ -98,7 +91,7 @@ impl SeedStore {
     /// Accessor for network byte.
     pub fn network(&self) -> u8 {
         let nonsecret_data = self.secretstore.nonsecret_data();
-        debug_assert_eq!(nonsecret_data.len(), 2);
+        debug_assert_eq!(nonsecret_data.len(), NONSECRET_DATA_LEN);
         nonsecret_data[0]
     }
 
@@ -263,13 +256,30 @@ impl Zeroize for SeedStore {
 impl SeedStoreCreator {
     /// Create a new store instance from given secret entropy bytes and network byte.
     /// The store can be written out to file using [`write_to_file`]
-    /// Caution: unencrypted secret data is taken
+    /// Caution: unencrypted secret data is taken.
+    /// `entropy`: the BIP39-style entropy bytes, with one of these lengths:
+    ///  16 (12 BIP39 mnemonic words), 20 (15 words), 24 (18 words), 28 bytes (21 words), or 32 bytes (24 words).
     pub fn new_from_data(entropy: &Vec<u8>, network: u8) -> Result<SeedStore, String> {
-        // TODO: verify entropy length
-        let entropy_checksum = checksum_of_entropy(entropy)?;
-        let nonsecret_data = vec![network, entropy_checksum];
+        // verify entropy length
+        let _res = Self::verify_entropy_length(entropy)?;
+
+        // Non-secret data: network byte, and 3 reserved bytes (reserved for later use)
+        let nonsecret_data = vec![network, 42, 43, 44];
+        debug_assert_eq!(nonsecret_data.len(), NONSECRET_DATA_LEN);
+
         let secretstore = SecretStoreCreator::new_from_data(nonsecret_data, entropy)?;
         SeedStore::new_from_secretstore(secretstore)
+    }
+
+    /// Verify that the entropy is of valid size. Valid sizes:
+    ///  16 (12 BIP39 mnemonic words), 20 (15 words), 24 (18 words), 28 bytes (21 words), or 32 bytes (24 words).
+    fn verify_entropy_length(entropy: &Vec<u8>) -> Result<(), String> {
+        let len = entropy.len();
+        if len == 16 || len == 20 || len == 24 || len == 28 || len == 32 {
+            Ok(())
+        } else {
+            Err(format!("Invalid entropy length {}", len))
+        }
     }
 
     /// Write out the encrypted contents to a file.
@@ -318,11 +328,13 @@ impl ChildSpecifier {
     }
 }
 
+#[allow(unused)]
 fn process_compute_checksum(entropy: &Vec<u8>) -> Result<u8, String> {
     let entropy_checksum_computed = checksum_of_entropy(&entropy)?;
     Ok(entropy_checksum_computed)
 }
 
+#[allow(unused)]
 fn checksum_of_entropy(entropy: &Vec<u8>) -> Result<u8, String> {
     let mnemo = Mnemonic::from_entropy(entropy)
         .map_err(|e| format!("Could not process entropy {}", e.to_string()))?;

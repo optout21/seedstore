@@ -9,11 +9,11 @@ const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
 const ENTROPY_OIL12: &str = "99d33a674ce99d33a674ce99d33a674c";
 const PAYLOAD_V1_EV3_CHACHA: &str =
-    "53530102000e030d15f1608af5fd9885600a614d3c5da8c42e06e3c9dd872ac2959234d2a31412f81ca7171ffb33f27120007d735a87f4691fb5fb2ae657030412f310ee748ecbe49a5266beb6fb61f02da09d464546";
+    "53530104002a2b2c030d6a14b96b3dc98ad33c2dc35966f1d019ae236ce28b8f003388bd0c6f6d6fa18c1ff12521a46bd2e52000e8b03820e69c000daddc7dbcf76a6a0137097893246d83033a6249cd89a21e3a3f8e8626";
 const PAYLOAD_V1_EV2_SCRYPT: &str =
-    "53530102000e020e612e9f5b26e546eb1c184df10479bf871000830a2ea9fcbb9ecc25b9d671e5a969d951190574";
+    "53530104002a2b2c020ee3d3970706fbe9f680eb68763af3c849100010907fc4f2740c7613422df300488137c1e6af59";
 const PAYLOAD_V1_EV1_XOR: &str =
-    "53530102000e01fe2f895dbc4d8f75c87b47aa4051549e10001770917c0ea37427b716a4a5df5770f12d1b575e";
+    "53530104002a2b2c01134a7bef7fd0b5704d7b44122dd634d210001662e6ef23b24a283f236315d8572c057fb8254d";
 const XPUB1: &str = "xpub6CDDB17Xj7pDDWedpLsED1JbPPQmyuapHmAzQEEs2P57hciCjwQ3ov7TfGsTZftAM2gVdPzE55L6gUvHguwWjY82518zw1Z3VbDeWgx3Jqs";
 const XPUB2: &str = "tpubDCRo9GmRAvEWANJ5iSfMEqPoq3uYvjBPAAjrDj5iQMxAq7DCs5orw7m9xJes8hWYAwKuH3T63WrKfzzw7g9ucbjq4LUu5cgCLUPMN7gUkrL";
 const ADDR1: &str = "bc1q98wufxmtfh5qlk7fe5dzy2z8cflvqjysrh4fx2";
@@ -153,8 +153,11 @@ fn write_to_file() {
     // check the file
     let contents = fs::read(&temp_file).unwrap();
     // Note: cannot assert full contents, it contains dynamic fields
-    assert_eq!(contents.len(), 46);
-    assert_eq!(contents[0..8].to_lower_hex_string(), "53530102000e020e");
+    assert_eq!(contents.len(), 48);
+    assert_eq!(
+        contents[0..10].to_lower_hex_string(),
+        "53530104002a2b2c020e"
+    );
 
     let _res = fs::remove_file(&temp_file);
 }
@@ -177,7 +180,7 @@ fn read_from_file() {
 }
 
 #[test]
-fn neg_read_from_file_scrypt_wrong_pw_invalid_checksum() {
+fn neg_read_from_file_scrypt_wrong_pw_wrong_result() {
     let temp_file = get_temp_file_name();
 
     // write constant payload to file
@@ -185,10 +188,10 @@ fn neg_read_from_file_scrypt_wrong_pw_invalid_checksum() {
     let _res = fs::write(&temp_file, &payload).unwrap();
 
     let password = PASSWORD2.to_owned();
-    let res = SeedStore::new_from_encrypted_file(&temp_file, &password);
-    debug_assert_eq!(
-        res.err().unwrap(),
-        "Checksum mismatch (14 vs 6), check the password and the secret file!"
+    let store = SeedStore::new_from_encrypted_file(&temp_file, &password).unwrap();
+    assert_eq!(
+        store.get_xpub().unwrap().to_string(),
+        "xpub6C9bhdVGdXxNebC2e2JWUxQVvuES2hyCSCVceFs8CttjxbLcZY4BwibjSjt9wYYMre2dwsHsEsonMZ9K7s28f2KdUARC1hLvmY2cBiufbJ4"
     );
 
     let _res = fs::remove_file(&temp_file);
@@ -204,13 +207,13 @@ fn neg_read_from_file_chacha_wrong_pw_decrypt_error() {
 
     let password = PASSWORD2.to_owned();
     let res = SeedStore::new_from_encrypted_file(&temp_file, &password);
-    debug_assert_eq!(res.err().unwrap(), "Decryption error aead::Error");
+    assert_eq!(res.err().unwrap(), "Decryption error aead::Error");
 
     let _res = fs::remove_file(&temp_file);
 }
 
 #[test]
-fn neg_read_from_file_xor_wrong_pw_invalid_checksum() {
+fn neg_read_from_file_xor_wrong_pw_wrong_result() {
     let temp_file = get_temp_file_name();
 
     // write constant payload to file
@@ -218,11 +221,20 @@ fn neg_read_from_file_xor_wrong_pw_invalid_checksum() {
     let _res = fs::write(&temp_file, &payload).unwrap();
 
     let password = PASSWORD2.to_owned();
-    let res = SeedStore::new_from_encrypted_file(&temp_file, &password);
-    debug_assert_eq!(
-        res.err().unwrap(),
-        "Checksum mismatch (14 vs 4), check the password and the secret file!"
+    let store = SeedStore::new_from_encrypted_file(&temp_file, &password).unwrap();
+    assert_eq!(
+        store.get_xpub().unwrap().to_string(),
+        "xpub6DDKxdpioLFXu3Gmg99GKf5Rrkpk5VoLU555MQPbhu8wT1zLWbp37wXtCUSwTnBcRwk4fhD8vtiTuwoSThBsXT4H8p3bNc6UduF44c9cTMe"
     );
 
     let _res = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn neg_create_from_data_invalid_entropy_len() {
+    let network = 0u8;
+    // 18-byte entropy is not valid
+    let entropy = [42u8; 18].to_vec();
+    let store_res = SeedStoreCreator::new_from_data(&entropy, network);
+    assert_eq!(store_res.err().unwrap(), "Invalid entropy length 18");
 }
