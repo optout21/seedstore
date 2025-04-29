@@ -27,12 +27,11 @@ Steps to mitigate the risks:
 ## TODO
 
 - passphrase to the seed ?
-- seedstore get mnemonic
 - implement Drop
 - direct access to secrets available only in separate feature
 - enforce restricted permissions on the file
 - encorce strong password
-- keystore for single key
+- keystore for storing a single key
 - version 1.0, with format guarantee
 - add support for ECDSA signing
 
