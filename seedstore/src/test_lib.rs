@@ -60,6 +60,28 @@ fn create_from_data() {
 }
 
 #[test]
+fn create_get_secret() {
+    let network = 0u8;
+    let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
+    let mut store = SeedStoreCreator::new_from_data(&entropy, network).unwrap();
+
+    assert_eq!(
+        store
+            .get_secret_child_private_key(&ChildSpecifier::Indices3and4(0, 0))
+            .unwrap()
+            .as_ref()
+            .to_lower_hex_string(),
+        "4a325ea0f3928321a2856b1d26d89c98a634b257d58a6e3ca434e4f0593ce3df"
+    );
+    assert_eq!(
+        store.get_secret_mnemonic().unwrap(),
+        "oil oil oil oil oil oil oil oil oil oil oil oil"
+    );
+
+    store.zeroize();
+}
+
+#[test]
 fn create_from_data_net_3() {
     let network = 3u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();

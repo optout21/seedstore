@@ -141,20 +141,28 @@ impl SeedStore {
     }
 
     /// Return a child PRIVATE key, generated from the secret entropy (and network).
-    /// Caution: partial unencrypted secret is returned in copy!
+    /// CAUTION: partial unencrypted secret is returned in copy!
     /// The child can be specified by index or derivation, see [`ChildSpecifier`]
-    pub fn get_child_private_key_derivation(
+    pub fn get_secret_child_private_key(
         &self,
         child_specifier: &ChildSpecifier,
     ) -> Result<SecretKey, String> {
         let derivation = child_specifier.derivation_path(self.network())?;
         let privkey = self.secretstore.processed_secret_data(|entropy| {
-            self.get_child_private_key_intern(entropy, &derivation)
+            self.get_secret_child_private_key_intern(entropy, &derivation)
         })?;
         Ok(privkey)
     }
 
-    /// Caution: secret material is taken, processed and returned
+    /// Return the full BIP39 secret mnemonic (corresponding to the entropy and network).
+    /// CAUTION: unencrypted secret is returned in copy!
+    pub fn get_secret_mnemonic(&self) -> Result<String, String> {
+        let mnemonic = self
+            .secretstore
+            .processed_secret_data(|entropy| self.get_secret_mnemonic_intern(entropy))?;
+        Ok(mnemonic)
+    }
+
     fn seed_from_entropy(&self, entropy: &Vec<u8>) -> Result<[u8; 64], String> {
         let mut mnemo = Mnemonic::from_entropy(entropy)
             .map_err(|e| format!("Invalid entropy, {} {}", entropy.len(), e.to_string()))?;
@@ -189,7 +197,7 @@ impl SeedStore {
     }
 
     /// Caution: secret material is taken, processed and returned
-    fn get_child_keypair_intern(
+    fn get_secret_child_keypair_intern(
         &self,
         entropy: &Vec<u8>,
         derivation: &DerivationPath,
@@ -214,9 +222,7 @@ impl SeedStore {
         entropy: &Vec<u8>,
         derivation: &DerivationPath,
     ) -> Result<String, String> {
-        let public_key = self
-            .get_child_keypair_intern(entropy, &derivation)?
-            .public_key();
+        let public_key = self.get_child_public_key_intern(entropy, derivation)?;
         let address = Address::p2wpkh(&CompressedPublicKey(public_key), self.network_as_enum());
         Ok(address.to_string())
     }
@@ -228,21 +234,27 @@ impl SeedStore {
         derivation: &DerivationPath,
     ) -> Result<PublicKey, String> {
         let public_key = self
-            .get_child_keypair_intern(entropy, derivation)?
+            .get_secret_child_keypair_intern(entropy, derivation)?
             .public_key();
         Ok(public_key)
     }
 
     /// Caution: secret material is taken, processed and returned
-    fn get_child_private_key_intern(
+    fn get_secret_child_private_key_intern(
         &self,
         entropy: &Vec<u8>,
         derivation: &DerivationPath,
     ) -> Result<SecretKey, String> {
         let secret_key = self
-            .get_child_keypair_intern(entropy, derivation)?
+            .get_secret_child_keypair_intern(entropy, derivation)?
             .secret_key();
         Ok(secret_key)
+    }
+
+    /// Caution: secret material is taken, processed and returned
+    fn get_secret_mnemonic_intern(&self, entropy: &Vec<u8>) -> Result<String, String> {
+        let mnemonic = Mnemonic::from_entropy(entropy).map_err(|e| e.to_string())?;
+        Ok(mnemonic.to_string())
     }
 }
 
