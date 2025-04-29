@@ -9,7 +9,11 @@ const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
 const NONSECRET_DATA1: &str = "010203";
 const SECRET_DATA1: &str = "0102030405060708";
-const PAYLOAD1: &str =
+const PAYLOAD_V1_EV3_CHACHA: &str =
+    "53530103010203030db42435f1ff810be24030aee961eb14528c7bb8303431d947b0f5a7e5a0b5648b9c481fd4e1cfad7918007525accb0b6e1b4a66683e6d1264dac8ecda5ba82cdbcbadccd5cd05";
+const PAYLOAD_V1_EV2_SCRYPT: &str =
+    "53530103010203020e24799f2ebaf27d4cd517136dd57ad71b0800b44fe9ca543c2f4dd8349e1b";
+const PAYLOAD_V1_EV1_XOR: &str =
     "5353010301020301f6ecb1e25f4945ae0605638d75c6a34208006e59b27ff2c90dd87c320627";
 
 fn create_store_from_data(nonsecret_data: Vec<u8>, secret_data: &Vec<u8>) -> SecretStore {
@@ -49,8 +53,8 @@ fn create_from_data() {
 }
 
 #[test]
-fn create_from_payload_const() {
-    let payload = Vec::from_hex(PAYLOAD1).unwrap();
+fn create_from_payload_const_scrypt() {
+    let payload = Vec::from_hex(PAYLOAD_V1_EV2_SCRYPT).unwrap();
     let password = PASSWORD1.to_owned();
 
     let mut store = create_store_from_payload(&payload, &password);
@@ -69,7 +73,53 @@ fn create_from_payload_const() {
             .assemble_encrypted_payload(&password)
             .unwrap()
             .to_lower_hex_string(),
-        PAYLOAD1
+        PAYLOAD_V1_EV2_SCRYPT
+    );
+
+    store.zeroize();
+}
+
+#[test]
+fn create_from_payload_const_chacha() {
+    let payload = Vec::from_hex(PAYLOAD_V1_EV3_CHACHA).unwrap();
+    let password = PASSWORD1.to_owned();
+
+    let mut store = create_store_from_payload(&payload, &password);
+
+    assert_eq!(
+        store.nonsecret_data().to_lower_hex_string(),
+        NONSECRET_DATA1
+    );
+    assert_eq!(
+        store.secret_data().unwrap().to_lower_hex_string(),
+        SECRET_DATA1
+    );
+
+    assert_eq!(
+        store
+            .assemble_encrypted_payload(&password)
+            .unwrap()
+            .to_lower_hex_string(),
+        PAYLOAD_V1_EV3_CHACHA
+    );
+
+    store.zeroize();
+}
+
+#[test]
+fn create_from_payload_const_xor() {
+    let payload = Vec::from_hex(PAYLOAD_V1_EV1_XOR).unwrap();
+    let password = PASSWORD1.to_owned();
+
+    let mut store = create_store_from_payload(&payload, &password);
+
+    assert_eq!(
+        store.nonsecret_data().to_lower_hex_string(),
+        NONSECRET_DATA1
+    );
+    assert_eq!(
+        store.secret_data().unwrap().to_lower_hex_string(),
+        SECRET_DATA1
     );
 
     store.zeroize();
@@ -89,14 +139,14 @@ fn create_from_payload_generated() {
 
     // Note: cannot assert full payload, contains dynamic fields
     let payload = store.assemble_encrypted_payload(&password).unwrap();
-    assert_eq!(payload.len(), 38);
-    assert_eq!(payload[0..8].to_lower_hex_string(), "5353010301020301");
+    assert_eq!(payload.len(), 39);
+    assert_eq!(payload[0..9].to_lower_hex_string(), "53530103010203020e");
 
     store.zeroize();
 }
 
 #[test]
-fn create_from_payload_different_pw() {
+fn create_from_payload_wrong_pw() {
     let nonsecret_data = Vec::from_hex(NONSECRET_DATA1).unwrap();
     let secret_data = Vec::from_hex(SECRET_DATA1).unwrap();
     let password = PASSWORD2.to_owned();
@@ -109,8 +159,8 @@ fn create_from_payload_different_pw() {
 
     // Note: cannot assert full payload, contains dynamic fields
     let payload = store.assemble_encrypted_payload(&password).unwrap();
-    assert_eq!(payload.len(), 38);
-    assert_eq!(payload[0..8].to_lower_hex_string(), "5353010301020301");
+    assert_eq!(payload.len(), 39);
+    assert_eq!(payload[0..9].to_lower_hex_string(), "53530103010203020e");
 
     store.zeroize();
 }
@@ -159,7 +209,7 @@ fn neg_create_from_payload_with_wrong_checksum() {
     let mut payload = create_payload_from_data(nonsecret_data.clone(), &secret_data, &password);
     let payload_len = payload.len();
     assert!(payload_len > 0);
-    payload[payload_len - 1] -= 1;
+    payload[payload_len - 1] = ((payload[payload_len - 1] as u16 + 255 as u16) % 256) as u8;
 
     let res = SecretStore::new_from_payload(&payload, &password);
     assert_eq!(
@@ -189,8 +239,8 @@ fn write_to_file() {
     // check the file
     let contents = fs::read(&temp_file).unwrap();
     // Note: cannot assert full contents, it contains dynamic fields
-    assert_eq!(contents.len(), 38);
-    assert_eq!(contents[0..8].to_lower_hex_string(), "5353010301020301");
+    assert_eq!(contents.len(), 39);
+    assert_eq!(contents[0..9].to_lower_hex_string(), "53530103010203020e");
 
     let _res = fs::remove_file(&temp_file);
 }
@@ -200,7 +250,7 @@ fn read_from_file() {
     let temp_file = get_temp_file_name();
 
     // write constant payload to file
-    let payload = Vec::from_hex(PAYLOAD1).unwrap();
+    let payload = Vec::from_hex(PAYLOAD_V1_EV2_SCRYPT).unwrap();
     let _res = fs::write(&temp_file, &payload).unwrap();
 
     let password = PASSWORD1.to_owned();
@@ -219,11 +269,46 @@ fn read_from_file() {
 }
 
 #[test]
-fn read_from_file_diff_pw() {
+fn neg_read_from_file_scrypt_wrong_pw_wrong_data() {
     let temp_file = get_temp_file_name();
 
     // write constant payload to file
-    let payload = Vec::from_hex(PAYLOAD1).unwrap();
+    let payload = Vec::from_hex(PAYLOAD_V1_EV2_SCRYPT).unwrap();
+    let _res = fs::write(&temp_file, &payload).unwrap();
+
+    let password = PASSWORD2.to_owned();
+    let store = SecretStore::new_from_encrypted_file(&temp_file, &password).unwrap();
+
+    assert_eq!(store.nonsecret_data().to_lower_hex_string(), "010203");
+    assert_eq!(
+        store.secret_data().unwrap().to_lower_hex_string(),
+        "ffc771ed7dfa9558"
+    );
+
+    let _res = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn neg_read_from_file_chacha_wrong_pw_decrypt_error() {
+    let temp_file = get_temp_file_name();
+
+    // write constant payload to file
+    let payload = Vec::from_hex(PAYLOAD_V1_EV3_CHACHA).unwrap();
+    let _res = fs::write(&temp_file, &payload).unwrap();
+
+    let password = PASSWORD2.to_owned();
+    let store_res = SecretStore::new_from_encrypted_file(&temp_file, &password);
+    assert_eq!(store_res.err().unwrap(), "Decryption error aead::Error");
+
+    let _res = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn neg_read_from_file_xor_wrong_pw_wrong_data() {
+    let temp_file = get_temp_file_name();
+
+    // write constant payload to file
+    let payload = Vec::from_hex(PAYLOAD_V1_EV1_XOR).unwrap();
     let _res = fs::write(&temp_file, &payload).unwrap();
 
     let password = PASSWORD2.to_owned();
