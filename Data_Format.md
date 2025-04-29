@@ -12,7 +12,7 @@ In this description `[n]` denotes a field of `n` bytes.
   [1] Nonsecret data len, in bytes, 0 -- 255
   [N] Nonsecret data
   Encrypted Secret Data section
-  [1] Encryption Version. Supported value: 1 (XOR encryption).
+  [1] Encryption Version. Supported value: 3 ("ChaCha").
 - Version-dependent Encrypted data, see separately below.
   [16] Encryption Salt
   [2] Encrypted Secret Data len, 2 bytes, big endian. Valid range: 1 -- 65535
@@ -21,9 +21,20 @@ In this description `[n]` denotes a field of `n` bytes.
   [4] Cheksum, of all the previous bytes. First 4 bytes of SHA256D hash.
 ```
 
-Encryption Version 1: XOR encrypted data
+
+Encryption Version 3: "ChaCha"-encrypted data (XChaCha20Poly1305)
+```
+- [1]  Number of Log2 rounds (e.g. 13)
+  [16] Encryption Salt
+  [24] Encryption Nonce
+  [2] Encrypted Secret Data len, 2 bytes, big endian. Valid range: 1 -- 65535
+  [N] Encrypted Secret Data
+```
+
+Encryption Version 1: DEPRECATED "XOR" encrypted data
 ```
   [16] Encryption Salt
   [2] Encrypted Secret Data len, 2 bytes, big endian. Valid range: 1 -- 65535
   [N] Encrypted Secret Data
 ```
+

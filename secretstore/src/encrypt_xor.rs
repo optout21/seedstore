@@ -1,4 +1,6 @@
+use crate::encrypt_common::{EncryptionAuxData, Encryptor};
 use bitcoin_hashes::Sha256d;
+use rand_core::{OsRng, RngCore};
 
 const ENCRYPTION_KEY_LEN: usize = 32;
 pub(crate) const SALT_LEN: usize = 16;
@@ -6,16 +8,6 @@ const ENCRYPT_KEY_HASH_MESSAGE: &str = "Secret Storage Key Prefix || Fix the Mon
 
 pub(crate) type EncryptionKey = [u8; ENCRYPTION_KEY_LEN];
 pub(crate) type EncryptionSalt = [u8; SALT_LEN];
-
-/// Trait for an actor that can encrypt and decrypt using a password.
-pub(crate) trait Encryptor {
-    /// Encrypt some data using an encryption password and salt, in-place.
-    fn encrypt(unencrypted_data: &mut Vec<u8>, password: &str, salt: &[u8]) -> Result<(), String>;
-
-    /// Decrypt some encrypted data using an encryption password and salt, in-place.
-    /// Caution: unencrypted data is returned in copy
-    fn decrypt(encrypted_data: &mut Vec<u8>, password: &str, salt: &[u8]) -> Result<(), String>;
-}
 
 /// Encryptor/decryptor using bitwise XOR.
 pub(crate) struct XorEncryptor {}
@@ -39,15 +31,35 @@ impl XorEncryptor {
 }
 
 impl Encryptor for XorEncryptor {
-    fn encrypt(unencrypted_data: &mut Vec<u8>, password: &str, salt: &[u8]) -> Result<(), String> {
-        let encryption_key = encryption_key_from_password(password, salt)?;
-        Self::encrypt_with_key(unencrypted_data, &encryption_key)
+    fn encrypt(
+        unencrypted_data: &mut Vec<u8>,
+        password: &str,
+        aux_data: &EncryptionAuxData,
+    ) -> Result<(), String> {
+        if let EncryptionAuxData::V1Xor(salt) = aux_data {
+            let encryption_key = encryption_key_from_password(password, salt)?;
+            Self::encrypt_with_key(unencrypted_data, &encryption_key)
+        } else {
+            Err("Invalid aux data type".to_owned())
+        }
     }
 
     /// Decrypt some encrypted data using an encryption password and salt
-    fn decrypt(encrypted_data: &mut Vec<u8>, password: &str, salt: &[u8]) -> Result<(), String> {
-        let encryption_key = encryption_key_from_password(password, salt)?;
-        Self::decrypt_with_key(encrypted_data, &encryption_key)
+    fn decrypt(
+        encrypted_data: &mut Vec<u8>,
+        password: &str,
+        aux_data: &EncryptionAuxData,
+    ) -> Result<(), String> {
+        if let EncryptionAuxData::V1Xor(salt) = aux_data {
+            let encryption_key = encryption_key_from_password(password, salt)?;
+            Self::decrypt_with_key(encrypted_data, &encryption_key)
+        } else {
+            Err("Invalid aux data type".to_owned())
+        }
+    }
+
+    fn generate_aux_data() -> EncryptionAuxData {
+        EncryptionAuxData::V1Xor(generate_salt())
     }
 }
 
@@ -77,9 +89,23 @@ fn perform_xor(data: &mut Vec<u8>, key: &EncryptionKey) -> Result<(), String> {
     Ok(())
 }
 
+/// Generate a random 16-byte salt
+fn generate_salt() -> EncryptionSalt {
+    let mut salt = EncryptionSalt::default();
+    let _res = OsRng.fill_bytes(&mut salt);
+    salt
+}
+
+pub(crate) fn generate_key() -> EncryptionKey {
+    let mut key = EncryptionKey::default();
+    let _res = OsRng.fill_bytes(&mut key);
+    key
+}
+
 #[cfg(test)]
 mod test {
     use super::{encryption_key_from_password, Encryptor, XorEncryptor};
+    use crate::{encrypt_chacha::EncryptionSalt, encrypt_common::EncryptionAuxData};
     use hex_conservative::{DisplayHex, FromHex};
 
     const PASSWORD1: &str = "password";
@@ -89,19 +115,21 @@ mod test {
 
     #[test]
     fn encrypt() {
-        let salt = Vec::from_hex(SALT1).unwrap();
+        let salt = EncryptionSalt::from_hex(SALT1).unwrap();
         let mut data = Vec::from_hex(DATA1).unwrap();
+        let aux_data = EncryptionAuxData::V1Xor(salt);
 
-        let _res = XorEncryptor::encrypt(&mut data, PASSWORD1, &salt).unwrap();
+        let _res = XorEncryptor::encrypt(&mut data, PASSWORD1, &aux_data).unwrap();
         assert_eq!(data.to_lower_hex_string(), DATA1_ENC);
     }
 
     #[test]
     fn decrypt() {
-        let salt = Vec::from_hex(SALT1).unwrap();
+        let salt = EncryptionSalt::from_hex(SALT1).unwrap();
         let mut data = Vec::from_hex(DATA1_ENC).unwrap();
+        let aux_data = EncryptionAuxData::V1Xor(salt);
 
-        let _res = XorEncryptor::decrypt(&mut data, PASSWORD1, &salt).unwrap();
+        let _res = XorEncryptor::decrypt(&mut data, PASSWORD1, &aux_data).unwrap();
         assert_eq!(data.to_lower_hex_string(), DATA1);
     }
 

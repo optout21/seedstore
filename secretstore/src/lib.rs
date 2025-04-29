@@ -9,6 +9,8 @@
 //! in a password-protected encrypted file.
 //! A typical example is a wallet storing the secret seed.
 
+mod encrypt_chacha;
+mod encrypt_common;
 mod encrypt_xor;
 mod secretstore;
 

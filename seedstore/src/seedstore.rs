@@ -7,14 +7,11 @@ use secretstore::{SecretStore, SecretStoreCreator};
 use std::str::FromStr;
 use zeroize::Zeroize;
 
-/// Store a secret data in an encrypred file.
-/// Also store some nonsecret data.
-/// Read them, store the secret encrypted with an ephemeral key.
-/// Secret data length can be between 1 and 256 bytes.
-/// Secret data is stored in a fixed byte array, to avoid allocations.
-/// A checksum is also stored, for the whole data.
-/// The encrypted part has no checksum, because if it had, it would be possible
-/// to check if a password decrypts it or not, which helps brute forcing.
+/// Store a secret BIP32-style entropy in an encrypted file
+/// Can be loaded from an encrypted file.
+/// Additionally store a network type byte,
+/// and an entropy checksum (to be able to avoid using wrong entropy due to wrong password).
+/// The secret is stored in memory scrabmled (using an ephemeral scrambling key).
 pub struct SeedStore {
     pub(crate) secretstore: SecretStore,
     secp: Secp256k1<All>,
@@ -167,7 +164,7 @@ impl SeedStore {
     /// Caution: secret material is taken, processed and returned
     fn seed_from_entropy(&self, entropy: &Vec<u8>) -> Result<[u8; 64], String> {
         let mut mnemo = Mnemonic::from_entropy(entropy)
-            .map_err(|e| format!("Could not process entropy {}", e.to_string()))?;
+            .map_err(|e| format!("Invalid entropy, {} {}", entropy.len(), e.to_string()))?;
         let seed = mnemo.to_seed_normalized("");
         mnemo.zeroize();
         Ok(seed)
@@ -268,6 +265,7 @@ impl SeedStoreCreator {
     /// The store can be written out to file using [`write_to_file`]
     /// Caution: unencrypted secret data is taken
     pub fn new_from_data(entropy: &Vec<u8>, network: u8) -> Result<SeedStore, String> {
+        // TODO: verify entropy length
         let entropy_checksum = checksum_of_entropy(entropy)?;
         let nonsecret_data = vec![network, entropy_checksum];
         let secretstore = SecretStoreCreator::new_from_data(nonsecret_data, entropy)?;

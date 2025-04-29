@@ -8,7 +8,9 @@ use zeroize::Zeroize;
 const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
 const ENTROPY_OIL12: &str = "99d33a674ce99d33a674ce99d33a674c";
-const PAYLOAD1: &str =
+const PAYLOAD2: &str =
+    "53530102000e030d15f1608af5fd9885600a614d3c5da8c42e06e3c9dd872ac2959234d2a31412f81ca7171ffb33f27120007d735a87f4691fb5fb2ae657030412f310ee748ecbe49a5266beb6fb61f02da09d464546";
+const PAYLOAD1_XOR: &str =
     "53530102000e01fe2f895dbc4d8f75c87b47aa4051549e10001770917c0ea37427b716a4a5df5770f12d1b575e";
 const XPUB1: &str = "xpub6CDDB17Xj7pDDWedpLsED1JbPPQmyuapHmAzQEEs2P57hciCjwQ3ov7TfGsTZftAM2gVdPzE55L6gUvHguwWjY82518zw1Z3VbDeWgx3Jqs";
 const XPUB2: &str = "tpubDCRo9GmRAvEWANJ5iSfMEqPoq3uYvjBPAAjrDj5iQMxAq7DCs5orw7m9xJes8hWYAwKuH3T63WrKfzzw7g9ucbjq4LUu5cgCLUPMN7gUkrL";
@@ -72,7 +74,26 @@ fn create_from_data_net_3() {
 
 #[test]
 fn create_from_payload_const() {
-    let payload = Vec::from_hex(PAYLOAD1).unwrap();
+    let payload = Vec::from_hex(PAYLOAD2).unwrap();
+    let password = PASSWORD1.to_owned();
+
+    let mut store = SeedStore::new_from_payload(&payload, &password).unwrap();
+
+    assert_eq!(store.network(), 0);
+    assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
+    assert_eq!(
+        store
+            .get_child_address(&ChildSpecifier::Indices3and4(0, 0))
+            .unwrap(),
+        "bc1q98wufxmtfh5qlk7fe5dzy2z8cflvqjysrh4fx2"
+    );
+
+    store.zeroize();
+}
+
+#[test]
+fn create_from_payload_const_xor() {
+    let payload = Vec::from_hex(PAYLOAD1_XOR).unwrap();
     let password = PASSWORD1.to_owned();
 
     let mut store = SeedStore::new_from_payload(&payload, &password).unwrap();
@@ -110,8 +131,8 @@ fn write_to_file() {
     // check the file
     let contents = fs::read(&temp_file).unwrap();
     // Note: cannot assert full contents, it contains dynamic fields
-    assert_eq!(contents.len(), 45);
-    assert_eq!(contents[0..6].to_lower_hex_string(), "53530102000e");
+    assert_eq!(contents.len(), 86);
+    assert_eq!(contents[0..8].to_lower_hex_string(), "53530102000e030d");
 
     let _res = fs::remove_file(&temp_file);
 }
@@ -121,7 +142,7 @@ fn read_from_file() {
     let temp_file = get_temp_file_name();
 
     // write constant payload to file
-    let payload = Vec::from_hex(PAYLOAD1).unwrap();
+    let payload = Vec::from_hex(PAYLOAD2).unwrap();
     let _res = fs::write(&temp_file, &payload).unwrap();
 
     let password = PASSWORD1.to_owned();
@@ -134,11 +155,26 @@ fn read_from_file() {
 }
 
 #[test]
-fn neg_read_from_file_diff_pw_invalid_checksum() {
+fn neg_read_from_file_wrong_pw_decrypt_error() {
     let temp_file = get_temp_file_name();
 
     // write constant payload to file
-    let payload = Vec::from_hex(PAYLOAD1).unwrap();
+    let payload = Vec::from_hex(PAYLOAD2).unwrap();
+    let _res = fs::write(&temp_file, &payload).unwrap();
+
+    let password = PASSWORD2.to_owned();
+    let res = SeedStore::new_from_encrypted_file(&temp_file, &password);
+    debug_assert_eq!(res.err().unwrap(), "Decryption error aead::Error");
+
+    let _res = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn neg_read_from_file_xor_wrong_pw_invalid_checksum() {
+    let temp_file = get_temp_file_name();
+
+    // write constant payload to file
+    let payload = Vec::from_hex(PAYLOAD1_XOR).unwrap();
     let _res = fs::write(&temp_file, &payload).unwrap();
 
     let password = PASSWORD2.to_owned();
