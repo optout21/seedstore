@@ -9,12 +9,16 @@
 //! in a password-protected encrypted file.
 //! A typical example is a wallet storing the secret seed.
 
+mod keystore;
 mod seedstore;
 
 #[cfg(test)]
 mod compat_backtest;
 #[cfg(test)]
-mod test_lib;
+mod test_keystore;
+#[cfg(test)]
+mod test_seedstore;
 
 // re-exports
+pub use crate::keystore::{KeyStore, KeyStoreCreator};
 pub use crate::seedstore::{ChildSpecifier, SeedStore, SeedStoreCreator};
