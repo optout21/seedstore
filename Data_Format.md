@@ -51,14 +51,14 @@ Encryption Version 1: DEPRECATED "XOR" encrypted data
 A concrete example, using Scrypt encryption, with each field on separate lines (hex):
 
 ```
-5353      Magic bytes
-01        Format version
-03        Nonsecret data len
-010203    Nonsecret data
-02        Encryption version
-0e        Rounds
-24799f2ebaf27d4cd517136dd57ad71b  Salt
-0800      Encrypted data len (on 2 bytes, value 8)
-b44fe9ca543c2f4d  Encrypted data
-d8349e1b  Checksum
+5353      Magic bytes (constant 2 bytes)
+01        Format version, V1
+03        Nonsecret data len, 3
+010203    Nonsecret data (3 bytes)
+02        Encryption version, V2 Scrypt
+0e        Rounds, 14
+24799f2ebaf27d4cd517136dd57ad71b  Salt (16 bytes)
+0800      Encrypted data len (in 2 bytes, LE, value 8)
+b44fe9ca543c2f4d  Encrypted data (8 bytes)
+d8349e1b  Checksum (4 bytes)
 ```

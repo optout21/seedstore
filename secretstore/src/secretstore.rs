@@ -21,14 +21,14 @@ const BYTE_MAX: u8 = 255;
 /// Store a secret data in an encrypred file.
 /// Also store some nonsecret data.
 /// Can be loaded from an encrypted file.
-/// The secret is stored in memory scrabmled (using an ephemeral scrambling key).
+/// The secret is stored in memory scrambled (using an ephemeral scrambling key).
 /// Secret data length can be between 1 and 65535 bytes.
 pub struct SecretStore {
     /// The format version used.
     format_version: FormatVersion,
     /// The encryption version used.
     encryption_version: EncryptionVersion,
-    /// Secret data, scrabmled with the ephemeral key.
+    /// Secret data, scrambled with the ephemeral key.
     scrambled_secret_data: Vec<u8>,
     /// The non-secret part of the data
     nonsecret_data: Vec<u8>,

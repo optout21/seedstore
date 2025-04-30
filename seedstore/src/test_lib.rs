@@ -28,25 +28,25 @@ fn create_from_data() {
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
     assert_eq!(
         store
-            .get_child_address(&ChildSpecifier::Indices3and4(0, 0))
+            .get_child_address(&ChildSpecifier::ChangeAndIndex34(0, 0))
             .unwrap(),
         ADDR1
     );
     assert_eq!(
         store
-            .get_child_address(&ChildSpecifier::Indices3and4(0, 1))
+            .get_child_address(&ChildSpecifier::ChangeAndIndex34(0, 1))
             .unwrap(),
         "bc1q2acf8wdcjkskt5ug24szudejaqv6wgu3jzuw02"
     );
     assert_eq!(
         store
-            .get_child_address(&ChildSpecifier::Indices3and4(1, 0))
+            .get_child_address(&ChildSpecifier::ChangeAndIndex34(1, 0))
             .unwrap(),
         "bc1q0rent4vu9eyqw3g0me4h0lgcply7j23yelnx6k"
     );
     assert_eq!(
         store
-            .get_child_public_key(&ChildSpecifier::Indices3and4(0, 0))
+            .get_child_public_key(&ChildSpecifier::ChangeAndIndex34(0, 0))
             .unwrap()
             .to_string(),
         "032814221178177cb5ac81ae0ffa3be2e3c936503d6927050af739a41311f3821e"
@@ -67,7 +67,7 @@ fn create_get_secret() {
 
     assert_eq!(
         store
-            .get_secret_child_private_key(&ChildSpecifier::Indices3and4(0, 0))
+            .get_secret_child_private_key(&ChildSpecifier::ChangeAndIndex34(0, 0))
             .unwrap()
             .as_ref()
             .to_lower_hex_string(),
@@ -91,7 +91,7 @@ fn create_from_data_net_3() {
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB2);
     assert_eq!(
         store
-            .get_child_address(&ChildSpecifier::Indices3and4(0, 0))
+            .get_child_address(&ChildSpecifier::ChangeAndIndex34(0, 0))
             .unwrap(),
         "tb1q6p8uqhn8rp5wrclfhh7a5q350zravflrd79rwg"
     );
@@ -108,7 +108,7 @@ fn create_from_payload_const_scrypt() {
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
     assert_eq!(
         store
-            .get_child_address(&ChildSpecifier::Indices3and4(0, 0))
+            .get_child_address(&ChildSpecifier::ChangeAndIndex34(0, 0))
             .unwrap(),
         ADDR1
     );
@@ -127,7 +127,7 @@ fn create_from_payload_const_chacha() {
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
     assert_eq!(
         store
-            .get_child_address(&ChildSpecifier::Indices3and4(0, 0))
+            .get_child_address(&ChildSpecifier::ChangeAndIndex34(0, 0))
             .unwrap(),
         ADDR1
     );
@@ -146,7 +146,7 @@ fn create_from_payload_const_xor() {
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
     assert_eq!(
         store
-            .get_child_address(&ChildSpecifier::Indices3and4(0, 0))
+            .get_child_address(&ChildSpecifier::ChangeAndIndex34(0, 0))
             .unwrap(),
         ADDR1,
     );
@@ -259,4 +259,56 @@ fn neg_create_from_data_invalid_entropy_len() {
     let entropy = [42u8; 18].to_vec();
     let store_res = SeedStoreCreator::new_from_data(&entropy, network);
     assert_eq!(store_res.err().unwrap(), "Invalid entropy length 18");
+}
+
+#[test]
+fn test_signature() {
+    let network = 0u8;
+    let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
+    let store = SeedStoreCreator::new_from_data(&entropy, network).unwrap();
+
+    assert_eq!(store.network(), 0);
+    assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
+
+    let child_specifier = ChildSpecifier::Index4(7);
+    let pubkey = store.get_child_public_key(&child_specifier).unwrap();
+
+    let hash_to_be_signed = [42; 32];
+
+    let signature = store
+        .sign_hash_with_child_private_key_ecdsa(&child_specifier, &hash_to_be_signed, &pubkey)
+        .unwrap();
+
+    // Signature can change, do not assert,
+    // but verify the signature
+    {
+        let secp = bitcoin::secp256k1::Secp256k1::new();
+        let msg = bitcoin::secp256k1::Message::from_digest_slice(&hash_to_be_signed).unwrap();
+        let verify_result = secp.verify_ecdsa(&msg, &signature, &pubkey);
+        assert!(verify_result.is_ok());
+    }
+}
+
+#[test]
+fn neg_test_signature_wrong_signer_key() {
+    let network = 0u8;
+    let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
+    let store = SeedStoreCreator::new_from_data(&entropy, network).unwrap();
+
+    assert_eq!(store.network(), 0);
+    assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
+
+    let hash_to_be_signed = [42; 32];
+
+    let signature_res = store.sign_hash_with_child_private_key_ecdsa(
+        &ChildSpecifier::Index4(7),
+        &hash_to_be_signed,
+        &store
+            .get_child_public_key(&ChildSpecifier::Index4(88))
+            .unwrap(),
+    );
+    assert_eq!(
+        signature_res.err().unwrap().get(0..23).unwrap(),
+        "Public key mismatch, 03"
+    );
 }
