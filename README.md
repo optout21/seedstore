@@ -29,7 +29,9 @@ Steps to mitigate the risks:
 - passphrase to the seed ?
 - enforce restricted permissions on the file
 - encorce strong password
+- seedstore tool (for prompting for and saving secret)
 - version 1.0, with format guarantee
+- (later) breaking challenge bounty
 
 
 ## Usage Example
@@ -72,6 +74,7 @@ cargo run --example create_seedstore
 ```
 
 _MSRV_: Rust 1.81 (due to `fs::exists`)
+
 
 ## Data Format
 

@@ -23,6 +23,7 @@ const BYTE_MAX: u8 = 255;
 /// Can be loaded from an encrypted file.
 /// The secret is stored in memory scrambled (using an ephemeral scrambling key).
 /// Secret data length can be between 1 and 65535 bytes.
+/// See also [`SecretStoreCreator`].
 pub struct SecretStore {
     /// The format version used.
     format_version: FormatVersion,
@@ -40,6 +41,7 @@ pub struct SecretStore {
 
 /// Helper class for creating the store from given data.
 /// Should be used only by the utility that creates the encrypted file.
+/// See also [`SecretStore`].
 pub struct SecretStoreCreator {}
 
 #[derive(Clone, Copy)]
