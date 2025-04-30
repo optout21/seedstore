@@ -30,9 +30,8 @@ Steps to mitigate the risks:
 - direct access to secrets available only in separate feature
 - enforce restricted permissions on the file
 - encorce strong password
-- keystore for storing a single key
+- KeyStore for storing a single key
 - version 1.0, with format guarantee
-- add support for ECDSA signing
 
 
 ## Usage Example

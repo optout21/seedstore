@@ -13,7 +13,8 @@
 use bip39::Mnemonic;
 use bitcoin::bip32::{DerivationPath, Xpriv, Xpub};
 use bitcoin::key::{Keypair, Secp256k1};
-use bitcoin::secp256k1::{All, PublicKey, SecretKey};
+use bitcoin::secp256k1::ecdsa::Signature;
+use bitcoin::secp256k1::{All, Message, PublicKey, SecretKey};
 use bitcoin::{Address, CompressedPublicKey, Network, NetworkKind};
 use secretstore::{SecretStore, SecretStoreCreator};
 use std::str::FromStr;
@@ -36,13 +37,13 @@ pub struct SeedStoreCreator {}
 
 /// Various ways to specify a child, e.g. by index or derivation path.
 pub enum ChildSpecifier {
-    /// Specify by the 4th (last, 'account') index (non-hardened) of the BIP84 derivation path;
+    /// Specify by the 4th (last, 'address_index') index (non-hardened) of the BIP84 derivation path;
     /// corresponds to "m/84'/<net>'/0'/0/<idx>"
-    IndexAccount(u32),
-    /// Specify by index, specifying the 3rd ('change') and 4th ('account') indices
+    Index4(u32),
+    /// Specify by index, specifying the 3rd ('change') and 4th ('address_index') indices
     /// (non-hardened) of the BIP84 derivation path;
     /// corresponds to "m/84'/<net>'/0'/<idx3>/<idx4>"
-    Indices3and4(u32, u32),
+    ChangeAndIndex34(u32, u32),
     /// Specify by full derivation path (as string), such as "m/84'/0'/0'/1/19"
     Derivation(String),
 }
@@ -267,6 +268,39 @@ impl SeedStore {
         let mnemonic = Mnemonic::from_entropy(entropy).map_err(|e| e.to_string())?;
         Ok(mnemonic.to_string())
     }
+
+    /// Sign using a child private key. Use ECDSA signature as it is used in bitcoin.
+    /// The child can be specified by index or derivation, see [`ChildSpecifier`].
+    /// A 32-byte digest (hash) is signed.
+    /// The signer public key has to be provided as well, to be able to check the signer key
+    /// (can be obtained using [`get_child_public_key`]).
+    /// Caution: secret material is processed internally
+    pub fn sign_hash_with_child_private_key_ecdsa(
+        &self,
+        child_specifier: &ChildSpecifier,
+        hash: &[u8; 32],
+        signer_public_key: &PublicKey,
+    ) -> Result<Signature, String> {
+        let private_key = self.get_secret_child_private_key(child_specifier)?;
+        let secp = bitcoin::key::Secp256k1::new();
+        let public_key = private_key.public_key(&secp);
+        // verify public key
+        if *signer_public_key != public_key {
+            return Err(format!(
+                "Public key mismatch, {} vs {}",
+                signer_public_key.to_string(),
+                public_key.to_string()
+            ));
+        }
+        let msg = Message::from_digest_slice(hash)
+            .map_err(|e| format!("Hash digest processing error {}", e.to_string()))?;
+        let signature = secp.sign_ecdsa(&msg, &private_key);
+
+        drop(secp);
+        let _ = private_key;
+
+        Ok(signature)
+    }
 }
 
 impl Zeroize for SeedStore {
@@ -323,13 +357,13 @@ impl ChildSpecifier {
     fn derivation_path(&self, network: u8) -> Result<DerivationPath, String> {
         let derivation_str = match &self {
             Self::Derivation(derivation_str) => derivation_str.clone(),
-            Self::Indices3and4(i3, i4) => format!(
+            Self::ChangeAndIndex34(i3, i4) => format!(
                 "{}/{}/{}",
                 Self::default_account_derivation_path3(network),
                 i3,
                 i4
             ),
-            Self::IndexAccount(i4) => format!(
+            Self::Index4(i4) => format!(
                 "{}/0/{}",
                 Self::default_account_derivation_path3(network),
                 i4
@@ -400,19 +434,19 @@ mod tests {
             DerivationPath::from_str("m/49'/1'/2'/3/4").unwrap()
         );
         assert_eq!(
-            ChildSpecifier::Indices3and4(1, 4)
+            ChildSpecifier::ChangeAndIndex34(1, 4)
                 .derivation_path(0)
                 .unwrap(),
             DerivationPath::from_str("m/84'/0'/0'/1/4").unwrap()
         );
         assert_eq!(
-            ChildSpecifier::Indices3and4(1, 4)
+            ChildSpecifier::ChangeAndIndex34(1, 4)
                 .derivation_path(1)
                 .unwrap(),
             DerivationPath::from_str("m/84'/1'/0'/1/4").unwrap()
         );
         assert_eq!(
-            ChildSpecifier::IndexAccount(66).derivation_path(0).unwrap(),
+            ChildSpecifier::Index4(66).derivation_path(0).unwrap(),
             DerivationPath::from_str("m/84'/0'/0'/0/66").unwrap()
         );
     }
