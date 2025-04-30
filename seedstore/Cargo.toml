@@ -9,6 +9,8 @@ edition = "2021"
 default = []
 # Allow direct access to secret material
 accesssecret = []
+# Helpers for seedstore-tool
+toolhelper = []
 
 [dependencies]
 bip39 = { version = "2.1.0", features = ["zeroize"] }

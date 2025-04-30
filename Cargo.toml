@@ -4,6 +4,7 @@ resolver = "2"
 members = [
     "secretstore",
     "seedstore",
+    "seedstore-tool",
 ]
 
 exclude = []

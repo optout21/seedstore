@@ -1,0 +1,8 @@
+[package]
+name = "seedstore-tool"
+version = "0.3.3"
+edition = "2021"
+
+[dependencies]
+bip39 = "2.1.0"
+seedstore = { version = "0.3.3", path = "../seedstore", features = ["toolhelper"] }
