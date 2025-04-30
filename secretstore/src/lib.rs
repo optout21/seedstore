@@ -16,6 +16,8 @@ mod encrypt_xor;
 mod secretstore;
 
 #[cfg(test)]
+mod compat_backtest;
+#[cfg(test)]
 mod test_lib;
 
 // re-exports

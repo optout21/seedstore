@@ -9,19 +9,19 @@ fn main() -> Result<(), String> {
     let path_for_secret_file = format!("{}/sample.secret", temp_dir().to_str().unwrap());
 
     match SeedStore::new_from_encrypted_file(&path_for_secret_file, user_password) {
+        Err(e) => {
+            eprintln!("Could not read from secret file, {}", e);
+        }
         Ok(ref mut seedstore) => {
             println!("Secret loaded from file ({})", path_for_secret_file);
 
-            let network = seedstore.network();
             let xpub = seedstore.get_xpub().unwrap();
+            let network = seedstore.network();
 
-            println!("Network:  {}", network);
             println!("XPUB:     {}", xpub);
+            println!("Network:  {}", network);
 
             seedstore.zeroize();
-        }
-        Err(e) => {
-            eprintln!("Could not read from secret file, {}", e);
         }
     };
     Ok(())

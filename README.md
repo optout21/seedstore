@@ -43,9 +43,8 @@ Reading secret from file:
 use seedstore::SeedStore;
 
     let seedstore = SeedStore::new_from_encrypted_file("./sample.secret", "PasswordVEWFVFDHHEBNJS3")?;
-    let network = seedstore.network();
     let xpub = seedstore.get_xpub().unwrap();
-}
+    let network = seedstore.network();
 ```
 
 Writing out seed secret:
@@ -78,4 +77,16 @@ cargo run --example create_seedstore
 _MSRV_: Rust 1.81 (due to `fs::exists`)
 
 ## Data Format
-Secret file data format documentation: [Data_Format.md](Data_Format.md)
+
+The data format of the secret file is documented here: [Data_Format.md](Data_Format.md)
+
+Data format backward compatibility:
+This project is committed to stay backward-compatible to files created by any previous version (starting from v1.0).
+Later versions may not be able to re-create older formats,
+(e.g. due to different default values),
+or create older versions at all, but they should be able to READ any older format.
+
+The reading of any secret files created by any previous versions should be supported.
+
+See backward compatibility tests: [compat_backtest.rs](seedstore/src/compat_backtest.rs).
+
