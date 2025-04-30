@@ -8,6 +8,7 @@
 //! SecretStore is a generic solution for storing some small secret data
 //! in a password-protected encrypted file.
 //! A typical example is a wallet storing the secret seed.
+//! See also crate `seedstore` ([`SeedStore`] and [`KeyStore`])
 
 mod encrypt_chacha;
 mod encrypt_common;

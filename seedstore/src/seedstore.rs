@@ -5,12 +5,6 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>.
 // You may not use this file except in accordance with the license.
 
-//! SeedStore is a solution for storing a BIP32-style master secret
-//! in a password-protected encrypted file.
-//! SeedStore is built on [`SecretStore`].
-//! A typical example is a wallet storing the secret seed.
-//! If only a single key is used, it it possible to use a child key, or use [`KeyStore`] for single key.
-
 use bip39::Mnemonic;
 use bitcoin::bip32::{DerivationPath, Xpriv, Xpub};
 use bitcoin::key::{Keypair, Secp256k1};
@@ -27,6 +21,7 @@ const NONSECRET_DATA_LEN: usize = 4;
 /// Can be loaded from an encrypted file.
 /// Additionally store a network type byte, and 3 bytes reserved for later use.
 /// The secret is stored in memory scrambled (using an ephemeral scrambling key).
+/// See also [`SeedStoreCreator`], [`KeyStore`].
 pub struct SeedStore {
     secretstore: SecretStore,
     secp: Secp256k1<All>,
@@ -34,6 +29,7 @@ pub struct SeedStore {
 
 /// Helper class for creating the store from given data.
 /// Should be used only by the utility that creates the encrypted file.
+/// See also [`SeedStore`].
 pub struct SeedStoreCreator {}
 
 /// Various ways to specify a child, e.g. by index or derivation path.
@@ -108,8 +104,8 @@ impl SeedStore {
         nonsecret_data[0]
     }
 
-    /// Convert network byte to [`bitcoin::network::Netork`]
-    pub fn network_as_enum(&self) -> Network {
+    /// Convert network byte to [`bitcoin::network::Network`].
+    pub fn network_byte_as_enum(&self) -> Network {
         match self.network() {
             0 => Network::Bitcoin,
             1 => Network::Testnet,
@@ -120,6 +116,17 @@ impl SeedStore {
         }
     }
 
+    /// Convert [`bitcoin::network::Network`] to network byte.
+    pub fn network_enum_as_byte(network_enum: Network) -> u8 {
+        match network_enum {
+            Network::Bitcoin => 0,
+            Network::Testnet => 1,
+            Network::Testnet4 => 2,
+            Network::Signet => 3,
+            Network::Regtest => 4,
+            _ => 0,
+        }
+    }
     /// Accessor for the XPUB, generated from the secret entropy (and network).
     /// Standard level-3 XPub is returned, using standaard BIP84 derivation path (ie. "m/84'/<net>'/0'").
     pub fn get_xpub(&self) -> Result<Xpub, String> {
@@ -192,6 +199,7 @@ impl SeedStore {
             .map_err(|e| format!("Invalid entropy, {} {}", entropy.len(), e.to_string()))?;
         let seed = mnemo.to_seed_normalized("");
         mnemo.zeroize();
+        drop(mnemo);
         Ok(seed)
     }
 
@@ -199,7 +207,7 @@ impl SeedStore {
     fn xpriv3_from_entropy(&self, entropy: &Vec<u8>) -> Result<Xpriv, String> {
         let mut seed = self.seed_from_entropy(entropy)?;
         let xpriv = Xpriv::new_master(
-            <Network as Into<NetworkKind>>::into(self.network_as_enum()),
+            <Network as Into<NetworkKind>>::into(self.network_byte_as_enum()),
             &seed,
         )
         .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
@@ -228,7 +236,7 @@ impl SeedStore {
     ) -> Result<Keypair, String> {
         let mut seed = self.seed_from_entropy(entropy)?;
         let xpriv = Xpriv::new_master(
-            <Network as Into<NetworkKind>>::into(self.network_as_enum()),
+            <Network as Into<NetworkKind>>::into(self.network_byte_as_enum()),
             &seed,
         )
         .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
@@ -247,7 +255,10 @@ impl SeedStore {
         derivation: &DerivationPath,
     ) -> Result<String, String> {
         let public_key = self.get_child_public_key_intern(entropy, derivation)?;
-        let address = Address::p2wpkh(&CompressedPublicKey(public_key), self.network_as_enum());
+        let address = Address::p2wpkh(
+            &CompressedPublicKey(public_key),
+            self.network_byte_as_enum(),
+        );
         Ok(address.to_string())
     }
 
@@ -365,7 +376,7 @@ impl SeedStoreCreator {
 }
 
 impl ChildSpecifier {
-    fn derivation_path(&self, network: u8) -> Result<DerivationPath, String> {
+    pub fn derivation_path(&self, network: u8) -> Result<DerivationPath, String> {
         let derivation_str = match &self {
             Self::Derivation(derivation_str) => derivation_str.clone(),
             Self::ChangeAndIndex34(i3, i4) => format!(

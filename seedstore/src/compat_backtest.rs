@@ -36,7 +36,15 @@ fn backward_compatibility_tests() {
             PASSWORD1,
             XPUB1
         ),
-        (   1,
+        (
+            1,
+            2,
+            "53530104002a2b2c020e650e2a5f62dc8902054924c371095cce10005bc1e8c728cc0dde549b01f75d1630e3a63721b2",
+            PASSWORD1,
+            XPUB1
+        ),
+        (
+            1,
             3,
             "53530104002a2b2c030d6a14b96b3dc98ad33c2dc35966f1d019ae236ce28b8f003388bd0c6f6d6fa18c1ff12521a46bd2e52000e8b03820e69c000daddc7dbcf76a6a0137097893246d83033a6249cd89a21e3a3f8e8626",
             PASSWORD1,

@@ -48,6 +48,8 @@ Encryption Version 1: DEPRECATED "XOR" encrypted data
   [N] Encrypted Secret Data
 ```
 
+## Examples
+
 A concrete example, using Scrypt encryption, with each field on separate lines (hex):
 
 ```
@@ -62,3 +64,5 @@ A concrete example, using Scrypt encryption, with each field on separate lines (
 b44fe9ca543c2f4d  Encrypted data (8 bytes)
 d8349e1b  Checksum (4 bytes)
 ```
+
+See also [sample_secret.sec](seedstore/sample_secret.sec) for a sample file.

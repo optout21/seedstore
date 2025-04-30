@@ -5,9 +5,11 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>.
 // You may not use this file except in accordance with the license.
 
-//! SeedStore is a solution for storing some bitcoin-related secret data
+//! [`SeedStore`] is a solution for storing a BIP32-style master secret.
 //! in a password-protected encrypted file.
+//! SeedStore is built on [`SecretStore`].
 //! A typical example is a wallet storing the secret seed.
+//! If only a single key is used, it it possible to use a child key, or use [`KeyStore`] for single key.
 
 mod keystore;
 mod seedstore;

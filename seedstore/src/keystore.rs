@@ -23,6 +23,7 @@ const NONSECRET_DATA_LEN: usize = 4;
 /// The secret can be loaded from an encrypted file.
 /// Additionally store as non-secret 4 bytes reserved for later use.
 /// The secret is stored in memory scrambled (using an ephemeral scrambling key).
+/// See also [`KeyStoreCreator`], [`SeedStore`].
 pub struct KeyStore {
     secretstore: SecretStore,
     public_key: PublicKey,
@@ -31,6 +32,7 @@ pub struct KeyStore {
 
 /// Helper class for creating the store from given data.
 /// Should be used only by the utility that creates the encrypted file.
+/// See also [`KeyStore`].
 pub struct KeyStoreCreator {}
 
 impl KeyStore {
