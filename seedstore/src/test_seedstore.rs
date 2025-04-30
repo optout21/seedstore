@@ -16,13 +16,15 @@ const PAYLOAD_V1_EV1_XOR: &str =
     "53530104002a2b2c01134a7bef7fd0b5704d7b44122dd634d210001662e6ef23b24a283f236315d8572c057fb8254d";
 const XPUB1: &str = "xpub6CDDB17Xj7pDDWedpLsED1JbPPQmyuapHmAzQEEs2P57hciCjwQ3ov7TfGsTZftAM2gVdPzE55L6gUvHguwWjY82518zw1Z3VbDeWgx3Jqs";
 const XPUB2: &str = "tpubDCRo9GmRAvEWANJ5iSfMEqPoq3uYvjBPAAjrDj5iQMxAq7DCs5orw7m9xJes8hWYAwKuH3T63WrKfzzw7g9ucbjq4LUu5cgCLUPMN7gUkrL";
+const XPUB3: &str = "xpub6CVT9PXjALUVjoa3t1kgq3fAiUoGYeothP8sZSstrJ6d2nJXy4ajmtCPgE59Xyw9LkHtf9TznxA8BhPu5d33JycXxRwToufe6zWoU6icLbJ";
 const ADDR1: &str = "bc1q98wufxmtfh5qlk7fe5dzy2z8cflvqjysrh4fx2";
+const PASSPHRASE1: &str = "this_is_a_secret_passphrase";
 
 #[test]
 fn create_from_data() {
     let network = 0u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let mut store = SeedStoreCreator::new_from_data(&entropy, network).unwrap();
+    let mut store = SeedStoreCreator::new_from_data(&entropy, network, None).unwrap();
 
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
@@ -64,7 +66,7 @@ fn create_from_data() {
 fn create_get_secret() {
     let network = 0u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let mut store = SeedStoreCreator::new_from_data(&entropy, network).unwrap();
+    let mut store = SeedStoreCreator::new_from_data(&entropy, network, None).unwrap();
 
     assert_eq!(
         store
@@ -86,7 +88,7 @@ fn create_get_secret() {
 fn create_from_data_net_3() {
     let network = 3u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let store = SeedStoreCreator::new_from_data(&entropy, network).unwrap();
+    let store = SeedStoreCreator::new_from_data(&entropy, network, None).unwrap();
 
     assert_eq!(store.network(), 3);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB2);
@@ -103,7 +105,7 @@ fn create_from_payload_const_scrypt() {
     let payload = Vec::from_hex(PAYLOAD_V1_EV2_SCRYPT).unwrap();
     let password = PASSWORD1.to_owned();
 
-    let mut store = SeedStore::new_from_payload(&payload, &password).unwrap();
+    let mut store = SeedStore::new_from_payload(&payload, &password, None).unwrap();
 
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
@@ -122,7 +124,7 @@ fn create_from_payload_const_chacha() {
     let payload = Vec::from_hex(PAYLOAD_V1_EV3_CHACHA).unwrap();
     let password = PASSWORD1.to_owned();
 
-    let mut store = SeedStore::new_from_payload(&payload, &password).unwrap();
+    let mut store = SeedStore::new_from_payload(&payload, &password, None).unwrap();
 
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
@@ -141,7 +143,7 @@ fn create_from_payload_const_xor() {
     let payload = Vec::from_hex(PAYLOAD_V1_EV1_XOR).unwrap();
     let password = PASSWORD1.to_owned();
 
-    let mut store = SeedStore::new_from_payload(&payload, &password).unwrap();
+    let mut store = SeedStore::new_from_payload(&payload, &password, None).unwrap();
 
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
@@ -167,7 +169,7 @@ fn get_temp_file_name() -> String {
 fn write_to_file() {
     let network = 0u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let store = SeedStoreCreator::new_from_data(&entropy, network).unwrap();
+    let store = SeedStoreCreator::new_from_data(&entropy, network, None).unwrap();
 
     let temp_file = get_temp_file_name();
     let password = PASSWORD1.to_owned();
@@ -194,7 +196,7 @@ fn read_from_file() {
     let _res = fs::write(&temp_file, &payload).unwrap();
 
     let password = PASSWORD1.to_owned();
-    let store = SeedStore::new_from_encrypted_file(&temp_file, &password).unwrap();
+    let store = SeedStore::new_from_encrypted_file(&temp_file, &password, None).unwrap();
 
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
@@ -206,7 +208,7 @@ fn read_from_file() {
 fn neg_create_from_payload_scrypt_wrong_pw_wrong_result() {
     let payload = Vec::from_hex(PAYLOAD_V1_EV2_SCRYPT).unwrap();
     let password = PASSWORD2.to_owned();
-    let store = SeedStore::new_from_payload(&payload, &password).unwrap();
+    let store = SeedStore::new_from_payload(&payload, &password, None).unwrap();
     assert_eq!(
         store.get_xpub().unwrap().to_string(),
         "xpub6C9bhdVGdXxNebC2e2JWUxQVvuES2hyCSCVceFs8CttjxbLcZY4BwibjSjt9wYYMre2dwsHsEsonMZ9K7s28f2KdUARC1hLvmY2cBiufbJ4"
@@ -217,7 +219,7 @@ fn neg_create_from_payload_scrypt_wrong_pw_wrong_result() {
 fn neg_create_from_payload_chacha_wrong_pw_decrypt_error() {
     let payload = Vec::from_hex(PAYLOAD_V1_EV3_CHACHA).unwrap();
     let password = PASSWORD2.to_owned();
-    let res = SeedStore::new_from_payload(&payload, &password);
+    let res = SeedStore::new_from_payload(&payload, &password, None);
     assert_eq!(res.err().unwrap(), "Decryption error aead::Error");
 }
 
@@ -225,7 +227,7 @@ fn neg_create_from_payload_chacha_wrong_pw_decrypt_error() {
 fn neg_rcreate_from_payload_xor_wrong_pw_wrong_result() {
     let payload = Vec::from_hex(PAYLOAD_V1_EV1_XOR).unwrap();
     let password = PASSWORD2.to_owned();
-    let store = SeedStore::new_from_payload(&payload, &password).unwrap();
+    let store = SeedStore::new_from_payload(&payload, &password, None).unwrap();
     assert_eq!(
         store.get_xpub().unwrap().to_string(),
         "xpub6DDKxdpioLFXu3Gmg99GKf5Rrkpk5VoLU555MQPbhu8wT1zLWbp37wXtCUSwTnBcRwk4fhD8vtiTuwoSThBsXT4H8p3bNc6UduF44c9cTMe"
@@ -237,7 +239,7 @@ fn neg_create_from_data_invalid_entropy_len() {
     let network = 0u8;
     // 18-byte entropy is not valid
     let entropy = [42u8; 18].to_vec();
-    let store_res = SeedStoreCreator::new_from_data(&entropy, network);
+    let store_res = SeedStoreCreator::new_from_data(&entropy, network, None);
     assert_eq!(store_res.err().unwrap(), "Invalid entropy length 18");
 }
 
@@ -245,7 +247,7 @@ fn neg_create_from_data_invalid_entropy_len() {
 fn test_signature() {
     let network = 0u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let store = SeedStoreCreator::new_from_data(&entropy, network).unwrap();
+    let store = SeedStoreCreator::new_from_data(&entropy, network, None).unwrap();
 
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
@@ -273,7 +275,7 @@ fn test_signature() {
 fn neg_test_signature_wrong_signer_key() {
     let network = 0u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let store = SeedStoreCreator::new_from_data(&entropy, network).unwrap();
+    let store = SeedStoreCreator::new_from_data(&entropy, network, None).unwrap();
 
     assert_eq!(store.network(), 0);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
@@ -291,4 +293,54 @@ fn neg_test_signature_wrong_signer_key() {
         signature_res.err().unwrap().get(0..23).unwrap(),
         "Public key mismatch, 03"
     );
+}
+
+#[test]
+fn passphrase_create_from_payload() {
+    let payload = Vec::from_hex(PAYLOAD_V1_EV2_SCRYPT).unwrap();
+    let password = PASSWORD1.to_owned();
+
+    {
+        // with no passphrase
+        let passphrase = None;
+        let store = SeedStore::new_from_payload(&payload, &password, passphrase).unwrap();
+        assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
+    }
+    {
+        // with a passphrase
+        let passphrase = Some(PASSPHRASE1);
+        let store = SeedStore::new_from_payload(&payload, &password, passphrase).unwrap();
+        assert_eq!(store.get_xpub().unwrap().to_string(), XPUB3);
+    }
+    {
+        // with another passphrase
+        let passphrase = Some("passphrase2");
+        let store = SeedStore::new_from_payload(&payload, &password, passphrase).unwrap();
+        assert_eq!(store.get_xpub().unwrap().to_string(), "xpub6D9q41qHBV9sjixixeA79ueUspGs5tiyfjkQhVtEhMUXLLXNT2d7LUUy8UbHB588GAUXSYwCi7ETXurtCFpvYNTtUGGyHUnch8DfgjetBUg");
+    }
+    {
+        // with empty passphase is the same as without
+        let passphrase = Some("");
+        let store = SeedStore::new_from_payload(&payload, &password, passphrase).unwrap();
+        assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
+    }
+}
+
+#[test]
+fn passphrase_create_from_data() {
+    let network = 0u8;
+    let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
+
+    {
+        // with no passphrase
+        let passphrase = None;
+        let store = SeedStoreCreator::new_from_data(&entropy, network, passphrase).unwrap();
+        assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
+    }
+    {
+        // with a passphrase
+        let passphrase = Some(PASSPHRASE1);
+        let store = SeedStoreCreator::new_from_data(&entropy, network, passphrase).unwrap();
+        assert_eq!(store.get_xpub().unwrap().to_string(), XPUB3);
+    }
 }

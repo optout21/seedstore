@@ -169,6 +169,19 @@ impl SecretStore {
             &self.encryption_aux_data,
         )
     }
+
+    /// Scramble arbitrary data in-place, with the ephemeral scrambling key.
+    pub fn scramble_data(&self, data: &mut Vec<u8>) -> Result<(), String> {
+        let _res = xor::XorEncryptor::encrypt_with_key(data, &self.ephemeral_scrambling_key)?;
+        Ok(())
+    }
+
+    /// Descramble arbitrary data in-place, with the ephemeral scrambling key.
+    pub fn descramble_data(&self, scrambled_data: &mut Vec<u8>) -> Result<(), String> {
+        let _res =
+            xor::XorEncryptor::encrypt_with_key(scrambled_data, &self.ephemeral_scrambling_key)?;
+        Ok(())
+    }
 }
 
 impl Zeroize for SecretStore {

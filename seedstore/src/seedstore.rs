@@ -21,9 +21,13 @@ const NONSECRET_DATA_LEN: usize = 4;
 /// Can be loaded from an encrypted file.
 /// Additionally store a network type byte, and 3 bytes reserved for later use.
 /// The secret is stored in memory scrambled (using an ephemeral scrambling key).
+/// An seed passphrase can be used optionally, but it is not stored in the encrypted file,
+/// but has to be provided when the file is read. Internally it is stored scrambled.
 /// See also [`SeedStoreCreator`], [`KeyStore`].
 pub struct SeedStore {
     secretstore: SecretStore,
+    /// Optional seed passphrase, stored as scrambled bytes (normalized UTF).
+    scrambled_optional_passphrase: Vec<u8>,
     secp: Secp256k1<All>,
 }
 
@@ -47,26 +51,35 @@ pub enum ChildSpecifier {
 
 impl SeedStore {
     /// Load the secret from a password-protected secret file.
+    /// `seed_passphrase`: Optional seed passphrase, needed to get the correct seed from the entropy (if it was used).
     pub fn new_from_encrypted_file(
         path_for_secret_file: &str,
         encryption_password: &str,
+        seed_passphrase: Option<&str>,
     ) -> Result<Self, String> {
         let secretstore =
             SecretStore::new_from_encrypted_file(path_for_secret_file, encryption_password)?;
-        Self::new_from_secretstore(secretstore)
+        Self::new_from_secretstore(secretstore, seed_passphrase)
     }
 
     /// Load the secret store from encrypted data.
     /// Typically the data is stored in a file, but this method takes the contents directly.
+    /// `seed_passphrase`: Optional seed passphrase, needed to get the correct seed from the entropy (if it was used).
     pub fn new_from_payload(
         secret_payload: &Vec<u8>,
         encryption_password: &str,
+        seed_passphrase: Option<&str>,
     ) -> Result<Self, String> {
         let secretstore = SecretStore::new_from_payload(secret_payload, encryption_password)?;
-        Self::new_from_secretstore(secretstore)
+        Self::new_from_secretstore(secretstore, seed_passphrase)
     }
 
-    fn new_from_secretstore(secretstore: SecretStore) -> Result<Self, String> {
+    /// Create new instance from secret store, and passphrase.
+    /// `seed_passphrase`: Optional seed passphrase, needed to get the correct seed from the entropy (if it was used).
+    fn new_from_secretstore(
+        secretstore: SecretStore,
+        seed_passphrase: Option<&str>,
+    ) -> Result<Self, String> {
         let nonsecret_data = secretstore.nonsecret_data();
         if nonsecret_data.len() != NONSECRET_DATA_LEN {
             return Err(format!(
@@ -77,8 +90,18 @@ impl SeedStore {
         }
         debug_assert_eq!(nonsecret_data.len(), NONSECRET_DATA_LEN);
 
+        let scrambled_optional_passphrase = match seed_passphrase {
+            None => Vec::new(),
+            Some(passphrase) => {
+                let mut bytes = passphrase.as_bytes().to_vec();
+                let _res = secretstore.scramble_data(&mut bytes)?;
+                bytes
+            }
+        };
+
         Ok(SeedStore {
             secretstore,
+            scrambled_optional_passphrase,
             secp: Secp256k1::new(),
         })
     }
@@ -197,10 +220,27 @@ impl SeedStore {
     fn seed_from_entropy(&self, entropy: &Vec<u8>) -> Result<[u8; 64], String> {
         let mut mnemo = Mnemonic::from_entropy(entropy)
             .map_err(|e| format!("Invalid entropy, {} {}", entropy.len(), e.to_string()))?;
-        let seed = mnemo.to_seed_normalized("");
+        let mut passphrase = self.unscambled_passphrase()?;
+        let seed = mnemo.to_seed_normalized(&passphrase);
         mnemo.zeroize();
         drop(mnemo);
+        passphrase.zeroize();
+        drop(passphrase);
         Ok(seed)
+    }
+
+    /// Return the unscrambled passphrase as string, or empty string if none is used.
+    /// Caution: unencrypted partial data is returned.
+    fn unscambled_passphrase(&self) -> Result<String, String> {
+        if self.scrambled_optional_passphrase.is_empty() {
+            return Ok(String::new());
+        }
+        // there is a passphrase
+        let mut bytes = self.scrambled_optional_passphrase.clone();
+        let _res = self.secretstore.descramble_data(&mut bytes)?;
+        let passphrase = String::from_utf8(bytes)
+            .map_err(|e| format!("Passphrase processing error {}", e.to_string()))?;
+        Ok(passphrase)
     }
 
     /// Caution: secret material is taken, processed and returned
@@ -328,6 +368,7 @@ impl SeedStore {
 impl Zeroize for SeedStore {
     fn zeroize(&mut self) {
         self.secretstore.zeroize();
+        self.scrambled_optional_passphrase.zeroize();
         self.secp = Secp256k1::new();
     }
 }
@@ -340,7 +381,12 @@ impl SeedStoreCreator {
     /// Caution: unencrypted secret data is taken.
     /// `entropy`: the BIP39-style entropy bytes, with one of these lengths:
     ///  16 (12 BIP39 mnemonic words), 20 (15 words), 24 (18 words), 28 bytes (21 words), or 32 bytes (24 words).
-    pub fn new_from_data(entropy: &Vec<u8>, network: u8) -> Result<SeedStore, String> {
+    /// `seed_passphrase`: Optional seed passphrase, needed to get the correct seed from the entropy (if it was used).
+    pub fn new_from_data(
+        entropy: &Vec<u8>,
+        network: u8,
+        seed_passphrase: Option<&str>,
+    ) -> Result<SeedStore, String> {
         // verify entropy length
         let _res = Self::verify_entropy_length(entropy)?;
 
@@ -349,7 +395,7 @@ impl SeedStoreCreator {
         debug_assert_eq!(nonsecret_data.len(), NONSECRET_DATA_LEN);
 
         let secretstore = SecretStoreCreator::new_from_data(nonsecret_data, entropy)?;
-        SeedStore::new_from_secretstore(secretstore)
+        SeedStore::new_from_secretstore(secretstore, seed_passphrase)
     }
 
     /// Verify that the entropy is of valid size. Valid sizes:
