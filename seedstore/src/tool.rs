@@ -59,7 +59,11 @@ impl SeedStoreTool {
         // Process cmd line arguments
         let config = Self::process_args(args)?;
 
-        Ok(Self { config })
+        Ok(Self::new_from_config(config))
+    }
+
+    fn new_from_config(config: Config) -> Self {
+        Self { config }
     }
 
     pub fn print_usage(progname: &Option<&String>) {
@@ -142,7 +146,7 @@ impl SeedStoreTool {
                 println!("Error processing arguments! {}", err);
                 Self::print_usage(&args.get(0));
             }
-            Ok(mut tool) => match tool.execute() {
+            Ok(tool) => match tool.execute() {
                 Err(err) => println!("ERROR: {}", err),
                 Ok(_) => {
                     println!("Done.");
@@ -151,7 +155,8 @@ impl SeedStoreTool {
         }
     }
 
-    pub fn execute(&mut self) -> Result<(), String> {
+    /// Return XPub (for testing)
+    pub fn execute(&self) -> Result<String, String> {
         println!("{}", self.config.to_string());
 
         match self.config.mode {
@@ -160,7 +165,9 @@ impl SeedStoreTool {
         }
     }
 
-    fn do_set(&self) -> Result<(), String> {
+    /// Perform Set file operation
+    /// Return XPub (for testing)
+    fn do_set(&self) -> Result<String, String> {
         let exists = fs::exists(&self.config.filename).unwrap_or(true);
         if exists {
             return Err(format!(
@@ -176,16 +183,23 @@ impl SeedStoreTool {
 
         let password = self.read_password()?;
 
-        let seedstore =
-            SeedStoreCreator::new_from_data(&entropy, self.config.network.unwrap_or_default())
-                .map_err(|e| format!("Could not encrypt secret, {}", e))?;
+        let passphrase = self.read_passphrase()?;
+
+        let seedstore = SeedStoreCreator::new_from_data(
+            &entropy,
+            self.config.network.unwrap_or_default(),
+            Some(&passphrase),
+        )
+        .map_err(|e| format!("Could not encrypt secret, {}", e))?;
+
+        let xpub = self.print_info(&seedstore)?;
 
         let _res = SeedStoreCreator::write_to_file(&seedstore, &self.config.filename, &password)
             .map_err(|e| format!("Could not write secret file, {}", e))?;
 
         println!("Seed written to encrypted file: {}", self.config.filename);
 
-        Ok(())
+        Ok(xpub)
     }
 
     fn read_password(&self) -> Result<String, String> {
@@ -198,17 +212,14 @@ impl SeedStoreTool {
         Ok(mnemonic)
     }
 
-    fn do_check(&self) -> Result<(), String> {
-        let exists = fs::exists(&self.config.filename).unwrap_or(false);
-        if !exists {
-            return Err(format!("Could not secret file {}", self.config.filename));
-        }
+    fn read_passphrase(&self) -> Result<String, String> {
+        let passphrase = "".to_owned(); // TODO read
+        Ok(passphrase)
+    }
 
-        let password = self.read_password()?;
-
-        let seedstore = SeedStore::new_from_encrypted_file(&self.config.filename, &password)
-            .map_err(|e| format!("Could not read secret file, {}", e))?;
-
+    /// Print out info from the seedstore
+    /// Return XPub (for testing)
+    fn print_info(&self, seedstore: &SeedStore) -> Result<String, String> {
         let xpub = seedstore.get_xpub()?.to_string();
         let child_spec0 = crate::ChildSpecifier::Index4(0);
         let address0 = seedstore.get_child_address(&child_spec0)?;
@@ -216,11 +227,6 @@ impl SeedStoreTool {
 
         let network = seedstore.network();
         let derivation = child_spec0.derivation_path(network)?.to_string();
-        println!("");
-        println!(
-            "Seed has been read from secret file {}",
-            self.config.filename
-        );
         println!(
             "XPUB, first address, and public key (network {}, derivation {}):",
             network, derivation
@@ -230,6 +236,106 @@ impl SeedStoreTool {
         println!("  {}", pubkey0);
         println!("");
 
-        Ok(())
+        Ok(xpub)
+    }
+
+    /// Return XPub (for testing)
+    fn do_check(&self) -> Result<String, String> {
+        let exists = fs::exists(&self.config.filename).unwrap_or(false);
+        if !exists {
+            return Err(format!(
+                "Could not find secret file {}",
+                self.config.filename
+            ));
+        }
+
+        let password = self.read_password()?;
+
+        let passphrase = self.read_passphrase()?;
+
+        let seedstore =
+            SeedStore::new_from_encrypted_file(&self.config.filename, &password, Some(&passphrase))
+                .map_err(|e| format!("Could not read secret file, {}", e))?;
+
+        println!("");
+        println!(
+            "Seed has been read from secret file {}",
+            self.config.filename
+        );
+
+        let xpub = self.print_info(&seedstore)?;
+
+        Ok(xpub)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Config, Mode, SeedStore, SeedStoreTool};
+    use hex_conservative::FromHex;
+    use rand::Rng;
+    use std::env::temp_dir;
+    use std::fs;
+
+    const PAYLOAD_V1_EV2_SCRYPT: &str = "53530104002a2b2c020ee3d3970706fbe9f680eb68763af3c849100010907fc4f2740c7613422df300488137c1e6af59";
+    const PASSWORD1: &str = "password";
+    const XPUB1: &str = "xpub6CDDB17Xj7pDDWedpLsED1JbPPQmyuapHmAzQEEs2P57hciCjwQ3ov7TfGsTZftAM2gVdPzE55L6gUvHguwWjY82518zw1Z3VbDeWgx3Jqs";
+
+    fn get_temp_file_name() -> String {
+        format!(
+            "{}/_seedstore_tempfile_{}_.tmp",
+            temp_dir().to_str().unwrap(),
+            rand::rng().random::<u32>()
+        )
+    }
+
+    #[test]
+    fn check() {
+        let temp_file = get_temp_file_name();
+        let payload = Vec::from_hex(PAYLOAD_V1_EV2_SCRYPT).unwrap();
+        let _res = fs::write(&temp_file, &payload).unwrap();
+
+        let config = Config {
+            mode: Mode::Check,
+            filename: temp_file.clone(),
+            network: None,
+            program_name: "tool".to_owned(),
+        };
+        let tool = SeedStoreTool::new_from_config(config);
+
+        let xpub = tool.execute().unwrap();
+
+        assert_eq!(xpub.to_string(), XPUB1);
+
+        let _res = fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn set() {
+        let temp_file = get_temp_file_name();
+
+        let network = 3;
+        let config = Config {
+            mode: Mode::Set,
+            filename: temp_file.clone(),
+            network: Some(network),
+            program_name: "tool".to_owned(),
+        };
+        let tool = SeedStoreTool::new_from_config(config);
+
+        let xpub = tool.execute().unwrap();
+
+        assert_eq!(xpub.to_string(), "tpubDCRo9GmRAvEWANJ5iSfMEqPoq3uYvjBPAAjrDj5iQMxAq7DCs5orw7m9xJes8hWYAwKuH3T63WrKfzzw7g9ucbjq4LUu5cgCLUPMN7gUkrL");
+
+        // Read back the file
+        {
+            let store = SeedStore::new_from_encrypted_file(&temp_file, PASSWORD1, None).unwrap();
+
+            assert_eq!(store.network(), network);
+            assert_eq!(store.get_xpub().unwrap().to_string(), "tpubDCRo9GmRAvEWANJ5iSfMEqPoq3uYvjBPAAjrDj5iQMxAq7DCs5orw7m9xJes8hWYAwKuH3T63WrKfzzw7g9ucbjq4LUu5cgCLUPMN7gUkrL");
+            drop(store);
+        }
+
+        let _res = fs::remove_file(&temp_file);
     }
 }
