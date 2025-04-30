@@ -9,6 +9,7 @@
 //! in a password-protected encrypted file.
 //! SeedStore is built on [`SecretStore`].
 //! A typical example is a wallet storing the secret seed.
+//! If only a single key is used, it it possible to use a child key, or use [`KeyStore`] for single key.
 
 use bip39::Mnemonic;
 use bitcoin::bip32::{DerivationPath, Xpriv, Xpub};
@@ -282,8 +283,7 @@ impl SeedStore {
         signer_public_key: &PublicKey,
     ) -> Result<Signature, String> {
         let private_key = self.get_secret_child_private_key(child_specifier)?;
-        let secp = bitcoin::key::Secp256k1::new();
-        let public_key = private_key.public_key(&secp);
+        let public_key = private_key.public_key(&self.secp);
         // verify public key
         if *signer_public_key != public_key {
             return Err(format!(
@@ -294,9 +294,8 @@ impl SeedStore {
         }
         let msg = Message::from_digest_slice(hash)
             .map_err(|e| format!("Hash digest processing error {}", e.to_string()))?;
-        let signature = secp.sign_ecdsa(&msg, &private_key);
+        let signature = self.secp.sign_ecdsa(&msg, &private_key);
 
-        drop(secp);
         let _ = private_key;
 
         Ok(signature)

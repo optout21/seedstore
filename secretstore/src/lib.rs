@@ -18,7 +18,7 @@ mod secretstore;
 #[cfg(test)]
 mod compat_backtest;
 #[cfg(test)]
-mod test_lib;
+mod test_secretstore;
 
 // re-exports
 pub use crate::secretstore::{SecretStore, SecretStoreCreator};

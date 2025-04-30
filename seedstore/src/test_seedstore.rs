@@ -202,54 +202,33 @@ fn read_from_file() {
 }
 
 #[test]
-fn neg_read_from_file_scrypt_wrong_pw_wrong_result() {
-    let temp_file = get_temp_file_name();
-
-    // write constant payload to file
+fn neg_create_from_payload_scrypt_wrong_pw_wrong_result() {
     let payload = Vec::from_hex(PAYLOAD_V1_EV2_SCRYPT).unwrap();
-    let _res = fs::write(&temp_file, &payload).unwrap();
-
     let password = PASSWORD2.to_owned();
-    let store = SeedStore::new_from_encrypted_file(&temp_file, &password).unwrap();
+    let store = SeedStore::new_from_payload(&payload, &password).unwrap();
     assert_eq!(
         store.get_xpub().unwrap().to_string(),
         "xpub6C9bhdVGdXxNebC2e2JWUxQVvuES2hyCSCVceFs8CttjxbLcZY4BwibjSjt9wYYMre2dwsHsEsonMZ9K7s28f2KdUARC1hLvmY2cBiufbJ4"
     );
-
-    let _res = fs::remove_file(&temp_file);
 }
 
 #[test]
-fn neg_read_from_file_chacha_wrong_pw_decrypt_error() {
-    let temp_file = get_temp_file_name();
-
-    // write constant payload to file
+fn neg_create_from_payload_chacha_wrong_pw_decrypt_error() {
     let payload = Vec::from_hex(PAYLOAD_V1_EV3_CHACHA).unwrap();
-    let _res = fs::write(&temp_file, &payload).unwrap();
-
     let password = PASSWORD2.to_owned();
-    let res = SeedStore::new_from_encrypted_file(&temp_file, &password);
+    let res = SeedStore::new_from_payload(&payload, &password);
     assert_eq!(res.err().unwrap(), "Decryption error aead::Error");
-
-    let _res = fs::remove_file(&temp_file);
 }
 
 #[test]
-fn neg_read_from_file_xor_wrong_pw_wrong_result() {
-    let temp_file = get_temp_file_name();
-
-    // write constant payload to file
+fn neg_rcreate_from_payload_xor_wrong_pw_wrong_result() {
     let payload = Vec::from_hex(PAYLOAD_V1_EV1_XOR).unwrap();
-    let _res = fs::write(&temp_file, &payload).unwrap();
-
     let password = PASSWORD2.to_owned();
-    let store = SeedStore::new_from_encrypted_file(&temp_file, &password).unwrap();
+    let store = SeedStore::new_from_payload(&payload, &password).unwrap();
     assert_eq!(
         store.get_xpub().unwrap().to_string(),
         "xpub6DDKxdpioLFXu3Gmg99GKf5Rrkpk5VoLU555MQPbhu8wT1zLWbp37wXtCUSwTnBcRwk4fhD8vtiTuwoSThBsXT4H8p3bNc6UduF44c9cTMe"
     );
-
-    let _res = fs::remove_file(&temp_file);
 }
 
 #[test]
