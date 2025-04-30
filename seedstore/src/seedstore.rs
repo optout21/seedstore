@@ -1,3 +1,15 @@
+// This file is Copyright its original authors, visible in version control
+// history.
+//
+// This file is licensed under the  MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>.
+// You may not use this file except in accordance with the license.
+
+//! SeedStore is a solution for storing a BIP32-style master secret
+//! in a password-protected encrypted file.
+//! SeedStore is built on [`SecretStore`].
+//! A typical example is a wallet storing the secret seed.
+
 use bip39::Mnemonic;
 use bitcoin::bip32::{DerivationPath, Xpriv, Xpub};
 use bitcoin::key::{Keypair, Secp256k1};
@@ -12,8 +24,7 @@ const NONSECRET_DATA_LEN: usize = 4;
 /// Store a secret BIP32-style entropy in an encrypted file
 /// Can be loaded from an encrypted file.
 /// Additionally store a network type byte, and 3 bytes reserved for later use.
-/// and an entropy checksum (to be able to avoid using wrong entropy due to wrong password).
-/// The secret is stored in memory scrabmled (using an ephemeral scrambling key).
+/// The secret is stored in memory scrambled (using an ephemeral scrambling key).
 pub struct SeedStore {
     pub(crate) secretstore: SecretStore,
     secp: Secp256k1<All>,
