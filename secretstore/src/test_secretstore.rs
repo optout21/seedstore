@@ -333,3 +333,17 @@ fn neg_create_password_too_short() {
     let res = SecretStoreCreator::write_to_file(&store, "dummy_filename", short_password);
     assert_eq!(res.err().unwrap(), "Password is too short! (2 vs 7)");
 }
+
+#[test]
+fn scramble_descramble_arbitrary() {
+    let store = create_store_from_data(vec![0], &vec![0]);
+    let data_hex: &str = "000102030405060708090a";
+    let mut data = Vec::from_hex(data_hex).unwrap();
+
+    let _res = store.scramble_data(&mut data).unwrap();
+    // Scrambled data is variable, cannot assert
+    assert_ne!(data.to_lower_hex_string(), data_hex);
+
+    let _res = store.descramble_data(&mut data).unwrap();
+    assert_eq!(data.to_lower_hex_string(), data_hex);
+}

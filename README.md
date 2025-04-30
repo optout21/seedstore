@@ -26,7 +26,6 @@ Steps to mitigate the risks:
 
 ## TODO
 
-- passphrase to the seed ?
 - enforce restricted permissions on the file
 - encorce strong password
 - seedstore tool (for prompting for and saving secret)
@@ -41,7 +40,7 @@ Reading secret from file:
 ```
 use seedstore::SeedStore;
 
-    let seedstore = SeedStore::new_from_encrypted_file("./sample.secret", "PasswordVEWFVFDHHEBNJS3")?;
+    let seedstore = SeedStore::new_from_encrypted_file("./sample.secret", "PasswordVEWFVFDHHEBNJS3", None)?;
     let xpub = seedstore.get_xpub().unwrap();
     let network = seedstore.network();
 ```
@@ -51,7 +50,7 @@ Writing out seed secret:
 ```
 use seedstore::SeedStoreCreator;
 
-    let seedstore = SeedStoreCreator::new_from_data(&entropy_bytes, 0)?;
+    let seedstore = SeedStoreCreator::new_from_data(&entropy_bytes, 0, None)?;
     SeedStoreCreator::write_to_file(&seedstore, "./sample.secret", "PasswordVEWFVFDHHEBNJS3")?;
 }
 ```
