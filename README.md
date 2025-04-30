@@ -27,10 +27,8 @@ Steps to mitigate the risks:
 ## TODO
 
 - passphrase to the seed ?
-- direct access to secrets available only in separate feature
 - enforce restricted permissions on the file
 - encorce strong password
-- KeyStore for storing a single key
 - version 1.0, with format guarantee
 
 

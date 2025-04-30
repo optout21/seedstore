@@ -25,6 +25,7 @@ fn create_from_data() {
     store.zeroize();
 }
 
+#[cfg(feature = "accesssecret")]
 #[test]
 fn create_get_secret() {
     let secret_key = <[u8; 32]>::from_hex(SECRETKEY1).unwrap();
