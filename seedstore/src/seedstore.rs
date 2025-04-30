@@ -28,7 +28,7 @@ const NONSECRET_DATA_LEN: usize = 4;
 /// Additionally store a network type byte, and 3 bytes reserved for later use.
 /// The secret is stored in memory scrambled (using an ephemeral scrambling key).
 pub struct SeedStore {
-    pub(crate) secretstore: SecretStore,
+    secretstore: SecretStore,
     secp: Secp256k1<All>,
 }
 
@@ -156,7 +156,17 @@ impl SeedStore {
     /// Return a child PRIVATE key, generated from the secret entropy (and network).
     /// CAUTION: partial unencrypted secret is returned in copy!
     /// The child can be specified by index or derivation, see [`ChildSpecifier`]
+    #[cfg(feature = "accesssecret")]
     pub fn get_secret_child_private_key(
+        &self,
+        child_specifier: &ChildSpecifier,
+    ) -> Result<SecretKey, String> {
+        self.get_secret_child_private_key_nonpub(child_specifier)
+    }
+
+    /// Return a child PRIVATE key, generated from the secret entropy (and network).
+    /// CAUTION: partial unencrypted secret is returned in copy!
+    fn get_secret_child_private_key_nonpub(
         &self,
         child_specifier: &ChildSpecifier,
     ) -> Result<SecretKey, String> {
@@ -169,6 +179,7 @@ impl SeedStore {
 
     /// Return the full BIP39 secret mnemonic (corresponding to the entropy and network).
     /// CAUTION: unencrypted secret is returned in copy!
+    #[cfg(feature = "accesssecret")]
     pub fn get_secret_mnemonic(&self) -> Result<String, String> {
         let mnemonic = self
             .secretstore
@@ -265,6 +276,7 @@ impl SeedStore {
     }
 
     /// Caution: secret material is taken, processed and returned
+    #[cfg(feature = "accesssecret")]
     fn get_secret_mnemonic_intern(&self, entropy: &Vec<u8>) -> Result<String, String> {
         let mnemonic = Mnemonic::from_entropy(entropy).map_err(|e| e.to_string())?;
         Ok(mnemonic.to_string())
@@ -282,7 +294,7 @@ impl SeedStore {
         hash: &[u8; 32],
         signer_public_key: &PublicKey,
     ) -> Result<Signature, String> {
-        let private_key = self.get_secret_child_private_key(child_specifier)?;
+        let private_key = self.get_secret_child_private_key_nonpub(child_specifier)?;
         let public_key = private_key.public_key(&self.secp);
         // verify public key
         if *signer_public_key != public_key {

@@ -115,6 +115,7 @@ impl SecretStore {
         let _res = descramble_secret(&mut decrypted, &self.ephemeral_scrambling_key)?;
         let res = f(&decrypted)?;
         decrypted.zeroize();
+        drop(decrypted);
         Ok(res)
     }
 

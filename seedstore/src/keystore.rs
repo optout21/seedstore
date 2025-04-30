@@ -24,7 +24,7 @@ const NONSECRET_DATA_LEN: usize = 4;
 /// Additionally store as non-secret 4 bytes reserved for later use.
 /// The secret is stored in memory scrambled (using an ephemeral scrambling key).
 pub struct KeyStore {
-    pub(crate) secretstore: SecretStore,
+    secretstore: SecretStore,
     public_key: PublicKey,
     secp: Secp256k1<All>,
 }
@@ -92,6 +92,9 @@ impl KeyStore {
         let private_key = SecretKey::from_slice(secret)
             .map_err(|e| format!("Secret key conversion error {}", e))?;
         let public_key = private_key.public_key(&secp);
+
+        let _ = private_key;
+
         Ok(public_key)
     }
 
@@ -123,7 +126,14 @@ impl KeyStore {
 
     /// Return the PRIVATE key.
     /// CAUTION: unencrypted secret is returned in copy!
+    #[cfg(feature = "accesssecret")]
     pub fn get_secret_private_key(&self) -> Result<SecretKey, String> {
+        self.get_secret_private_key_nonpub()
+    }
+
+    /// Return the PRIVATE key.
+    /// CAUTION: unencrypted secret is returned in copy!
+    fn get_secret_private_key_nonpub(&self) -> Result<SecretKey, String> {
         let private_key = self.secretstore.processed_secret_data(|secret| {
             Self::get_secret_private_key_from_secret_intern(secret)
         })?;
@@ -139,7 +149,7 @@ impl KeyStore {
         hash: &[u8; 32],
         signer_public_key: &PublicKey,
     ) -> Result<Signature, String> {
-        let private_key = self.get_secret_private_key()?;
+        let private_key = self.get_secret_private_key_nonpub()?;
         let public_key = private_key.public_key(&self.secp);
         // verify public key
         if *signer_public_key != public_key {

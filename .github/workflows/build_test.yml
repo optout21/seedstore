@@ -18,7 +18,9 @@ jobs:
     - name: Set up Rust
       run: rustup override set 1.81
     - uses: actions/checkout@v4
-    - name: Build
+    - name: Build with default features
       run: cargo build --verbose
+    - name: Build
+      run: cargo build --features accesssecret --verbose
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test --features accesssecret --verbose

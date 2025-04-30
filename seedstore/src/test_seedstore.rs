@@ -59,6 +59,7 @@ fn create_from_data() {
     store.zeroize();
 }
 
+#[cfg(feature = "accesssecret")]
 #[test]
 fn create_get_secret() {
     let network = 0u8;

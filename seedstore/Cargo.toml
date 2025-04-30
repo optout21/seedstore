@@ -1,14 +1,19 @@
 [package]
 name = "seedstore"
-version = "0.3.1"
+version = "0.3.2"
 description = "Store bitcoin secret material (BIP39 mnemonic entropy, or similar) in an encrypted file"
 license = "MIT"
 edition = "2021"
 
+[features]
+default = []
+# Allow direct access to secret material
+accesssecret = []
+
 [dependencies]
 bip39 = { version = "2.1.0", features = ["zeroize"] }
 bitcoin = "0.32.5"
-secretstore = { version = "0.3.1", path = "../secretstore" }
+secretstore = { version = "0.3.2", path = "../secretstore" }
 zeroize = "1.8.1"
 
 [dev-dependencies]
