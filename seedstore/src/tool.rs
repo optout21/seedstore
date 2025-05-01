@@ -2,6 +2,7 @@
 use crate::{SeedStore, SeedStoreCreator};
 use bip39::Mnemonic;
 use std::{fs, str::FromStr};
+use std::io::{BufRead, Write, self, stdout};
 
 const DEFAULT_FILE_NAME: &str = "secret.sec";
 const DEFAULT_NETWORK: u8 = 0;
@@ -180,17 +181,18 @@ impl SeedStoreTool {
         let mnemonic = Mnemonic::from_str(&mnemonic_str)
             .map_err(|e| format!("Invalid mnemonic {}", e.to_string()))?;
         let entropy = mnemonic.to_entropy();
+        println!("Seedphrase entered, seems OK");
 
         let password = self.read_password()?;
 
-        let passphrase = self.read_passphrase()?;
+        let passphrase = self.read_passphrase_if_needed(&password)?;
 
         let seedstore = SeedStoreCreator::new_from_data(
             &entropy,
             self.config.network.unwrap_or_default(),
             Some(&passphrase),
         )
-        .map_err(|e| format!("Could not encrypt secret, {}", e))?;
+            .map_err(|e| format!("Could not encrypt secret, {}", e))?;
 
         let xpub = self.print_info(&seedstore)?;
 
@@ -203,18 +205,63 @@ impl SeedStoreTool {
     }
 
     fn read_password(&self) -> Result<String, String> {
-        let password = "password".to_owned(); // TODO read
-        Ok(password)
+        let password1 = rpassword::prompt_password("Enter the encryption password: ")
+            .map_err(|e| format!("Error reading password, {}", e.to_string()))?;
+        let password2 = rpassword::prompt_password("Repeat the encryption password: ")
+            .map_err(|e| format!("Error reading password, {}", e.to_string()))?;
+        if password1 != password2 {
+            return Err("The two passwords don't match".to_owned());
+        }
+        println!("Passwords entered, match OK");
+        debug_assert_eq!(password1, password2);
+        Ok(password1)
     }
 
     fn read_mnemonic(&self) -> Result<String, String> {
-        let mnemonic = "oil oil oil oil oil oil oil oil oil oil oil oil".to_owned(); // TODO read
+        let mnemonic = rpassword::prompt_password("Enter the seedphrase (mnemonic) words (input is hidden): ")
+            .map_err(|e| format!("Error reading mnemonic, {}", e.to_string()))?;
         Ok(mnemonic)
     }
 
+    fn read_line() -> String {
+        let stdin = io::stdin();
+        let mut iterator = stdin.lock().lines();
+        let line1 = iterator.next().unwrap().unwrap_or_default();
+        line1
+    }
+
     fn read_passphrase(&self) -> Result<String, String> {
-        let passphrase = "".to_owned(); // TODO read
-        Ok(passphrase)
+        let passphrase1 = rpassword::prompt_password("Enter the seed passphrase: ")
+            .map_err(|e| format!("Error reading passphrase, {}", e.to_string()))?;
+        let passphrase2 = rpassword::prompt_password("Repeat the seed passphrase: ")
+            .map_err(|e| format!("Error reading passphrase, {}", e.to_string()))?;
+        if passphrase1 != passphrase2 {
+            return Err("The two passphrase don't match".to_owned());
+        }
+        println!("Passphrases entered, match OK");
+        debug_assert_eq!(passphrase1, passphrase2);
+        Ok(passphrase1)
+    }
+
+    fn read_passphrase_if_needed(&self, encryption_password: &String) -> Result<String, String> {
+        println!("Optionally, a seed passphrase can be used. Please choose:");
+        println!("  Enter or 0 : no passphrase");
+        println!("  1          : enter a passphrase");
+        println!("  2          : use the encryption password as passphrase too");
+        loop {
+            print!("Enter your choice: ");
+            let _res = stdout().flush();
+            let resp = Self::read_line();
+            match resp.as_str() {
+                "" | "0" => return Ok("".to_string()),
+                "1" => {
+                    let passphrase = self.read_passphrase()?;
+                    return Ok(passphrase);
+                },
+                "2" => return Ok(encryption_password.clone()),
+                _ => {}
+            }
+        }
     }
 
     /// Print out info from the seedstore
@@ -251,7 +298,7 @@ impl SeedStoreTool {
 
         let password = self.read_password()?;
 
-        let passphrase = self.read_passphrase()?;
+        let passphrase = self.read_passphrase_if_needed(&password)?;
 
         let seedstore =
             SeedStore::new_from_encrypted_file(&self.config.filename, &password, Some(&passphrase))
