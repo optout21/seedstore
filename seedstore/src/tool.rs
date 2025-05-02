@@ -13,6 +13,8 @@ enum Mode {
     Set,
     /// Check existing file
     Check,
+    /// Help only
+    Help,
 }
 
 struct Config {
@@ -48,6 +50,7 @@ impl ToString for Config {
         s += match self.mode {
             Mode::Check => "Check only",
             Mode::Set => "Set",
+            Mode::Help => "Help only",
         };
         s += &format!("   File: {}", self.filename);
         if let Some(n) = self.network {
@@ -75,7 +78,7 @@ impl SeedStoreTool {
         println!("{}:  Set or check secret seed file", progname);
         println!("");
         println!(
-            "{}  [--set] [--file <file>] [--signet] [--net <N>]",
+            "{}  [--help] [--set] [--file <file>] [--signet] [--net <N>]",
             progname
         );
         println!("  --set:         If specified, mnemominc is prompted for, and secret is saved. Secret file must not exist.");
@@ -92,6 +95,7 @@ impl SeedStoreTool {
             "  --net <N>      Network byte. Default is mainnet ({})",
             DEFAULT_NETWORK
         );
+        println!("  --help         Print usage (this)");
         println!("");
     }
 
@@ -130,13 +134,15 @@ impl SeedStoreTool {
                 } else {
                     return Err("--net requires an argument".to_owned());
                 }
+            } else if *a == "--help" {
+                config.mode = Mode::Help;
             } else {
                 return Err(format!("Unknown argument {}", a));
             }
             i += 1;
         }
 
-        if config.mode == Mode::Check && config.network.is_some() {
+        if config.network.is_some() && config.mode != Mode::Set {
             return Err("Network should be specified only in Set mode".to_owned());
         }
 
@@ -165,6 +171,10 @@ impl SeedStoreTool {
         match self.config.mode {
             Mode::Set => self.do_set(),
             Mode::Check => self.do_check(),
+            Mode::Help => {
+                Self::print_usage(&Some(&self.config.program_name));
+                Ok("".to_owned())
+            }
         }
     }
 
