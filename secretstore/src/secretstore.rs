@@ -5,6 +5,8 @@ use crate::encrypt_xor as xor;
 use bitcoin_hashes::Sha256d;
 use hex_conservative::{DisplayHex, FromHex};
 use std::fs;
+#[cfg(feature = "unixfilepermissions")]
+use std::os::unix::fs::PermissionsExt;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Minimum accepted password length
@@ -141,7 +143,44 @@ impl SecretStore {
                 path_for_secret_file
             ));
         }
+
+        // First create empty file
+        let f = fs::File::create(path_for_secret_file).map_err(|e| {
+            format!(
+                "Error writing to file {}, {}",
+                path_for_secret_file,
+                e.to_string()
+            )
+        })?;
+
+        // Create contents
         let encrypted_payload = self.assemble_encrypted_payload(encryption_password)?;
+
+        // Set restricted permissions
+        #[cfg(feature = "unixfilepermissions")]
+        {
+            let metadata = f.metadata().map_err(|e| {
+                format!(
+                    "Error getting file metadata {}, {}",
+                    path_for_secret_file,
+                    e.to_string()
+                )
+            })?;
+            let mut permissions = metadata.permissions();
+
+            permissions.set_mode(0o600); // Read/write for owner, no read for others.
+            assert_eq!(permissions.mode(), 0o600);
+
+            let _res = f.set_permissions(permissions).map_err(|e| {
+                format!(
+                    "Error removing permsissions from file {}, {}",
+                    path_for_secret_file,
+                    e.to_string()
+                )
+            })?;
+        }
+
+        // Write out contents
         let _res = fs::write(path_for_secret_file, encrypted_payload).map_err(|e| {
             format!(
                 "Error writing to file {}, {}",

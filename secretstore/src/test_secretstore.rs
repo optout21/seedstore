@@ -325,13 +325,17 @@ fn neg_read_from_file_xor_wrong_pw_wrong_result() {
 
 #[test]
 fn neg_create_password_too_short() {
+    let temp_file = get_temp_file_name();
     let nonsecret_data = Vec::from_hex(NONSECRET_DATA1).unwrap();
     let secret_data = Vec::from_hex(SECRET_DATA1).unwrap();
     let store = create_store_from_data(nonsecret_data.clone(), &secret_data);
 
     let short_password = "no";
-    let res = SecretStoreCreator::write_to_file(&store, "dummy_filename", short_password);
+    let _res = fs::remove_file(&temp_file);
+    let res = SecretStoreCreator::write_to_file(&store, &temp_file, short_password);
     assert_eq!(res.err().unwrap(), "Password is too short! (2 vs 7)");
+
+    let _res = fs::remove_file(&temp_file);
 }
 
 #[test]
