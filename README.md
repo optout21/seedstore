@@ -26,7 +26,6 @@ Steps to mitigate the risks:
 
 ## TODO
 
-- enforce restricted permissions on the file
 - encorce strong password
 - version 1.0, with format guarantee
 - (later) breaking challenge bounty
