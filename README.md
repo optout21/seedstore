@@ -28,12 +28,11 @@ Steps to mitigate the risks:
 
 - enforce restricted permissions on the file
 - encorce strong password
-- seedstore tool (for prompting for and saving secret)
 - version 1.0, with format guarantee
 - (later) breaking challenge bounty
 
 
-## Usage Example
+## Usage -- Example usage of the code
 
 Reading secret from file:
 
@@ -58,7 +57,7 @@ use seedstore::SeedStoreCreator;
 See the [example programs](seedstore/examples).
 
 
-## Usage Guide
+## Usage -- Building
 
 `SeedStore` is a simple Rust library. To compile it, use the usual Rust commands.
 
@@ -73,6 +72,26 @@ cargo run --example create_seedstore
 ```
 
 _MSRV_: Rust 1.81 (due to `fs::exists`)
+
+
+## Usage -- Tool
+
+`seedstore-tool` is a command-line utility to create or check secret files.
+Here are some sample calls to get started:
+
+```
+cargo r -p seedstore-tool -- --help
+```
+
+Check existing secret file; type 'password' for encryption password, twice:
+```
+cargo r -p seedstore-tool -- --file seedstore/sample_secret.sec
+```
+
+Create a new secret, enter secret information to store:
+```
+cargo r -p seedstore-tool -- --set --file /tmp/newfile
+```
 
 
 ## Data Format

@@ -14,6 +14,9 @@
 mod keystore;
 mod seedstore;
 
+#[cfg(feature = "toolhelper")]
+mod tool;
+
 #[cfg(test)]
 mod compat_backtest;
 #[cfg(test)]
@@ -24,3 +27,5 @@ mod test_seedstore;
 // re-exports
 pub use crate::keystore::{KeyStore, KeyStoreCreator};
 pub use crate::seedstore::{ChildSpecifier, SeedStore, SeedStoreCreator};
+#[cfg(feature = "toolhelper")]
+pub use crate::tool::SeedStoreTool;
