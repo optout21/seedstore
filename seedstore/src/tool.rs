@@ -1,8 +1,8 @@
 ///! Utility tool implementation: tool to create or check an encrypted secret seed file.
 use crate::{SeedStore, SeedStoreCreator};
 use bip39::Mnemonic;
+use std::io::{self, stdout, BufRead, Write};
 use std::{fs, str::FromStr};
-use std::io::{BufRead, Write, self, stdout};
 
 const DEFAULT_FILE_NAME: &str = "secret.sec";
 const DEFAULT_NETWORK: u8 = 0;
@@ -20,6 +20,7 @@ struct Config {
     filename: String,
     network: Option<u8>,
     program_name: String,
+    test_canned_input: Vec<String>,
 }
 
 /// Utility tool implementation: tool to create or check an encrypted secret seed file.
@@ -34,6 +35,7 @@ impl Config {
             filename: DEFAULT_FILE_NAME.to_owned(),
             network: None,
             program_name: "tool".to_owned(),
+            test_canned_input: Vec::new(),
         }
     }
 }
@@ -147,7 +149,7 @@ impl SeedStoreTool {
                 println!("Error processing arguments! {}", err);
                 Self::print_usage(&args.get(0));
             }
-            Ok(tool) => match tool.execute() {
+            Ok(mut tool) => match tool.execute() {
                 Err(err) => println!("ERROR: {}", err),
                 Ok(_) => {
                     println!("Done.");
@@ -157,7 +159,7 @@ impl SeedStoreTool {
     }
 
     /// Return XPub (for testing)
-    pub fn execute(&self) -> Result<String, String> {
+    pub fn execute(&mut self) -> Result<String, String> {
         println!("{}", self.config.to_string());
 
         match self.config.mode {
@@ -168,7 +170,7 @@ impl SeedStoreTool {
 
     /// Perform Set file operation
     /// Return XPub (for testing)
-    fn do_set(&self) -> Result<String, String> {
+    fn do_set(&mut self) -> Result<String, String> {
         let exists = fs::exists(&self.config.filename).unwrap_or(true);
         if exists {
             return Err(format!(
@@ -192,7 +194,7 @@ impl SeedStoreTool {
             self.config.network.unwrap_or_default(),
             Some(&passphrase),
         )
-            .map_err(|e| format!("Could not encrypt secret, {}", e))?;
+        .map_err(|e| format!("Could not encrypt secret, {}", e))?;
 
         let xpub = self.print_info(&seedstore)?;
 
@@ -204,11 +206,28 @@ impl SeedStoreTool {
         Ok(xpub)
     }
 
-    fn read_password(&self) -> Result<String, String> {
-        let password1 = rpassword::prompt_password("Enter the encryption password: ")
-            .map_err(|e| format!("Error reading password, {}", e.to_string()))?;
-        let password2 = rpassword::prompt_password("Repeat the encryption password: ")
-            .map_err(|e| format!("Error reading password, {}", e.to_string()))?;
+    fn next_canned_input(&mut self) -> Option<String> {
+        if self.config.test_canned_input.is_empty() {
+            return None;
+        }
+        debug_assert!(self.config.test_canned_input.len() >= 1);
+        let next = self.config.test_canned_input.remove(0);
+        println!("Using canned input '{}'", next);
+        Some(next)
+    }
+
+    fn read_no_echo(&mut self, item_name: &str, prompt: &str) -> Result<String, String> {
+        if let Some(canned_input) = self.next_canned_input() {
+            return Ok(canned_input);
+        }
+        let result = rpassword::prompt_password(prompt)
+            .map_err(|e| format!("Error reading {}, {}", item_name, e.to_string()))?;
+        Ok(result)
+    }
+
+    fn read_password(&mut self) -> Result<String, String> {
+        let password1 = self.read_no_echo("password", "Enter the encryption password: ")?;
+        let password2 = self.read_no_echo("password", "Repeat the encryption password: ")?;
         if password1 != password2 {
             return Err("The two passwords don't match".to_owned());
         }
@@ -217,24 +236,27 @@ impl SeedStoreTool {
         Ok(password1)
     }
 
-    fn read_mnemonic(&self) -> Result<String, String> {
-        let mnemonic = rpassword::prompt_password("Enter the seedphrase (mnemonic) words (input is hidden): ")
-            .map_err(|e| format!("Error reading mnemonic, {}", e.to_string()))?;
+    fn read_mnemonic(&mut self) -> Result<String, String> {
+        let mnemonic = self.read_no_echo(
+            "mnemonic",
+            "Enter the seedphrase (mnemonic) words (input is hidden): ",
+        )?;
         Ok(mnemonic)
     }
 
-    fn read_line() -> String {
+    fn read_line(&mut self) -> String {
+        if let Some(canned_input) = self.next_canned_input() {
+            return canned_input;
+        }
         let stdin = io::stdin();
         let mut iterator = stdin.lock().lines();
         let line1 = iterator.next().unwrap().unwrap_or_default();
         line1
     }
 
-    fn read_passphrase(&self) -> Result<String, String> {
-        let passphrase1 = rpassword::prompt_password("Enter the seed passphrase: ")
-            .map_err(|e| format!("Error reading passphrase, {}", e.to_string()))?;
-        let passphrase2 = rpassword::prompt_password("Repeat the seed passphrase: ")
-            .map_err(|e| format!("Error reading passphrase, {}", e.to_string()))?;
+    fn read_passphrase(&mut self) -> Result<String, String> {
+        let passphrase1 = self.read_no_echo("passphrase", "Enter the seed passphrase: ")?;
+        let passphrase2 = self.read_no_echo("passphrase", "Repeat the seed passphrase: ")?;
         if passphrase1 != passphrase2 {
             return Err("The two passphrase don't match".to_owned());
         }
@@ -243,7 +265,10 @@ impl SeedStoreTool {
         Ok(passphrase1)
     }
 
-    fn read_passphrase_if_needed(&self, encryption_password: &String) -> Result<String, String> {
+    fn read_passphrase_if_needed(
+        &mut self,
+        encryption_password: &String,
+    ) -> Result<String, String> {
         println!("Optionally, a seed passphrase can be used. Please choose:");
         println!("  Enter or 0 : no passphrase");
         println!("  1          : enter a passphrase");
@@ -251,13 +276,13 @@ impl SeedStoreTool {
         loop {
             print!("Enter your choice: ");
             let _res = stdout().flush();
-            let resp = Self::read_line();
+            let resp = self.read_line();
             match resp.as_str() {
                 "" | "0" => return Ok("".to_string()),
                 "1" => {
                     let passphrase = self.read_passphrase()?;
                     return Ok(passphrase);
-                },
+                }
                 "2" => return Ok(encryption_password.clone()),
                 _ => {}
             }
@@ -287,7 +312,7 @@ impl SeedStoreTool {
     }
 
     /// Return XPub (for testing)
-    fn do_check(&self) -> Result<String, String> {
+    fn do_check(&mut self) -> Result<String, String> {
         let exists = fs::exists(&self.config.filename).unwrap_or(false);
         if !exists {
             return Err(format!(
@@ -327,6 +352,7 @@ mod tests {
     const PAYLOAD_V1_EV2_SCRYPT: &str = "53530104002a2b2c020ee3d3970706fbe9f680eb68763af3c849100010907fc4f2740c7613422df300488137c1e6af59";
     const PASSWORD1: &str = "password";
     const XPUB1: &str = "xpub6CDDB17Xj7pDDWedpLsED1JbPPQmyuapHmAzQEEs2P57hciCjwQ3ov7TfGsTZftAM2gVdPzE55L6gUvHguwWjY82518zw1Z3VbDeWgx3Jqs";
+    const MNEMO1: &str = "oil oil oil oil oil oil oil oil oil oil oil oil";
 
     fn get_temp_file_name() -> String {
         format!(
@@ -347,8 +373,13 @@ mod tests {
             filename: temp_file.clone(),
             network: None,
             program_name: "tool".to_owned(),
+            test_canned_input: vec![
+                PASSWORD1.to_owned(), // encryption password
+                PASSWORD1.to_owned(), // repeat encryption password
+                "".to_owned(),        // passphrase
+            ],
         };
-        let tool = SeedStoreTool::new_from_config(config);
+        let mut tool = SeedStoreTool::new_from_config(config);
 
         let xpub = tool.execute().unwrap();
 
@@ -367,8 +398,14 @@ mod tests {
             filename: temp_file.clone(),
             network: Some(network),
             program_name: "tool".to_owned(),
+            test_canned_input: vec![
+                MNEMO1.to_owned(),    // mnemonic
+                PASSWORD1.to_owned(), // encryption password
+                PASSWORD1.to_owned(), // repeat encryption password
+                "".to_owned(),        // passphrase
+            ],
         };
-        let tool = SeedStoreTool::new_from_config(config);
+        let mut tool = SeedStoreTool::new_from_config(config);
 
         let xpub = tool.execute().unwrap();
 
@@ -384,5 +421,26 @@ mod tests {
         }
 
         let _res = fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn neg_set_pw_dont_match() {
+        let temp_file = get_temp_file_name();
+
+        let config = Config {
+            mode: Mode::Set,
+            filename: temp_file,
+            network: Some(0),
+            program_name: "tool".to_owned(),
+            test_canned_input: vec![
+                MNEMO1.to_owned(),      // mnemonic
+                "password".to_owned(),  // encryption password
+                "passsword".to_owned(), // repeat encryption password
+            ],
+        };
+        let mut tool = SeedStoreTool::new_from_config(config);
+
+        let res = tool.execute();
+        assert_eq!(res.err().unwrap(), "The two passwords don't match");
     }
 }
