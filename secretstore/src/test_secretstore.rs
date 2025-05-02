@@ -242,6 +242,14 @@ fn write_to_file() {
     assert_eq!(contents.len(), 39);
     assert_eq!(contents[0..9].to_lower_hex_string(), "53530103010203020e");
 
+    // Verify permissions
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let permissions = std::fs::metadata(temp_file.clone()).unwrap().permissions();
+        println!("permissions: {:o}", permissions.mode());
+        assert_eq!(permissions.mode() & 0o07777, 0o600);
+    }
+
     let _res = fs::remove_file(&temp_file);
 }
 
