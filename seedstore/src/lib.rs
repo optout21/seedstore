@@ -5,11 +5,12 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>.
 // You may not use this file except in accordance with the license.
 
-//! [`SeedStore`] is a solution for storing a BIP32-style master secret.
+//! [`SeedStore`] is a solution for storing a BIP32-style master secret
 //! in a password-protected encrypted file.
-//! SeedStore is built on [`SecretStore`].
+//! SeedStore is built on [`secretstore::SecretStore`].
 //! A typical example is a wallet storing the secret seed.
-//! If only a single key is used, it it possible to use a child key, or use [`KeyStore`] for single key.
+//!
+//! If only a single key is needed, it it possible to use a single child key, or use [`KeyStore`] for a single key.
 
 mod keystore;
 mod seedstore;

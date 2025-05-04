@@ -21,9 +21,10 @@ const NONSECRET_DATA_LEN: usize = 4;
 
 /// Store a single bitcoin-style ECDSA 32-byte private key in an encrypted file.
 /// The secret can be loaded from an encrypted file.
-/// Additionally store as non-secret 4 bytes reserved for later use.
+/// Additionally store 4 bytes of non-secret data, reserved for later use.
+///
 /// The secret is stored in memory scrambled (using an ephemeral scrambling key).
-/// See also [`KeyStoreCreator`], [`SeedStore`].
+/// See also [`KeyStoreCreator`], [`super::SeedStore`].
 pub struct KeyStore {
     secretstore: SecretStore,
     public_key: PublicKey,

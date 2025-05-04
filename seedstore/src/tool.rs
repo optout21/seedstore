@@ -201,7 +201,9 @@ impl SeedStoreTool {
 
         let seedstore = SeedStoreCreator::new_from_data(
             &entropy,
-            self.config.network.unwrap_or_default(),
+            self.config
+                .network
+                .map(|nb| SeedStore::network_byte_to_enum(nb)),
             Some(&passphrase),
         )
         .map_err(|e| format!("Could not encrypt secret, {}", e))?;
@@ -425,7 +427,7 @@ mod tests {
         {
             let store = SeedStore::new_from_encrypted_file(&temp_file, PASSWORD1, None).unwrap();
 
-            assert_eq!(store.network(), network);
+            assert_eq!(store.network_as_u8(), network);
             assert_eq!(store.get_xpub().unwrap().to_string(), "tpubDCRo9GmRAvEWANJ5iSfMEqPoq3uYvjBPAAjrDj5iQMxAq7DCs5orw7m9xJes8hWYAwKuH3T63WrKfzzw7g9ucbjq4LUu5cgCLUPMN7gUkrL");
             drop(store);
         }
