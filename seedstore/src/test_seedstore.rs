@@ -1,4 +1,5 @@
 use crate::{ChildSpecifier, SeedStore, SeedStoreCreator};
+use bitcoin::Network;
 use hex_conservative::{DisplayHex, FromHex};
 use rand::Rng;
 use std::env::temp_dir;
@@ -22,11 +23,10 @@ const PASSPHRASE1: &str = "this_is_a_secret_passphrase";
 
 #[test]
 fn create_from_data() {
-    let network = 0u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let mut store = SeedStoreCreator::new_from_data(&entropy, network, None).unwrap();
+    let mut store = SeedStoreCreator::new_from_data(&entropy, None, None).unwrap();
 
-    assert_eq!(store.network(), 0);
+    assert_eq!(store.network(), Network::Bitcoin);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
     assert_eq!(
         store
@@ -64,9 +64,8 @@ fn create_from_data() {
 #[cfg(feature = "accesssecret")]
 #[test]
 fn create_get_secret() {
-    let network = 0u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let mut store = SeedStoreCreator::new_from_data(&entropy, network, None).unwrap();
+    let mut store = SeedStoreCreator::new_from_data(&entropy, None, None).unwrap();
 
     assert_eq!(
         store
@@ -85,12 +84,12 @@ fn create_get_secret() {
 }
 
 #[test]
-fn create_from_data_net_3() {
-    let network = 3u8;
+fn create_from_data_net_signet() {
+    let network = Network::Signet;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let store = SeedStoreCreator::new_from_data(&entropy, network, None).unwrap();
+    let store = SeedStoreCreator::new_from_data(&entropy, Some(network), None).unwrap();
 
-    assert_eq!(store.network(), 3);
+    assert_eq!(store.network(), network);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB2);
     assert_eq!(
         store
@@ -107,7 +106,7 @@ fn create_from_payload_const_scrypt() {
 
     let mut store = SeedStore::new_from_payload(&payload, &password, None).unwrap();
 
-    assert_eq!(store.network(), 0);
+    assert_eq!(store.network(), Network::Bitcoin);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
     assert_eq!(
         store
@@ -126,7 +125,7 @@ fn create_from_payload_const_chacha() {
 
     let mut store = SeedStore::new_from_payload(&payload, &password, None).unwrap();
 
-    assert_eq!(store.network(), 0);
+    assert_eq!(store.network(), Network::Bitcoin);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
     assert_eq!(
         store
@@ -145,7 +144,7 @@ fn create_from_payload_const_xor() {
 
     let mut store = SeedStore::new_from_payload(&payload, &password, None).unwrap();
 
-    assert_eq!(store.network(), 0);
+    assert_eq!(store.network(), Network::Bitcoin);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
     assert_eq!(
         store
@@ -167,9 +166,8 @@ fn get_temp_file_name() -> String {
 
 #[test]
 fn write_to_file() {
-    let network = 0u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let store = SeedStoreCreator::new_from_data(&entropy, network, None).unwrap();
+    let store = SeedStoreCreator::new_from_data(&entropy, None, None).unwrap();
 
     let temp_file = get_temp_file_name();
     let password = PASSWORD1.to_owned();
@@ -198,7 +196,7 @@ fn read_from_file() {
     let password = PASSWORD1.to_owned();
     let store = SeedStore::new_from_encrypted_file(&temp_file, &password, None).unwrap();
 
-    assert_eq!(store.network(), 0);
+    assert_eq!(store.network(), Network::Bitcoin);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
 
     let _res = fs::remove_file(&temp_file);
@@ -236,20 +234,18 @@ fn neg_rcreate_from_payload_xor_wrong_pw_wrong_result() {
 
 #[test]
 fn neg_create_from_data_invalid_entropy_len() {
-    let network = 0u8;
     // 18-byte entropy is not valid
     let entropy = [42u8; 18].to_vec();
-    let store_res = SeedStoreCreator::new_from_data(&entropy, network, None);
+    let store_res = SeedStoreCreator::new_from_data(&entropy, None, None);
     assert_eq!(store_res.err().unwrap(), "Invalid entropy length 18");
 }
 
 #[test]
 fn test_signature() {
-    let network = 0u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let store = SeedStoreCreator::new_from_data(&entropy, network, None).unwrap();
+    let store = SeedStoreCreator::new_from_data(&entropy, None, None).unwrap();
 
-    assert_eq!(store.network(), 0);
+    assert_eq!(store.network(), Network::Bitcoin);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
 
     let child_specifier = ChildSpecifier::Index4(7);
@@ -273,11 +269,10 @@ fn test_signature() {
 
 #[test]
 fn neg_test_signature_wrong_signer_key() {
-    let network = 0u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
-    let store = SeedStoreCreator::new_from_data(&entropy, network, None).unwrap();
+    let store = SeedStoreCreator::new_from_data(&entropy, None, None).unwrap();
 
-    assert_eq!(store.network(), 0);
+    assert_eq!(store.network(), Network::Bitcoin);
     assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
 
     let hash_to_be_signed = [42; 32];
@@ -328,19 +323,18 @@ fn passphrase_create_from_payload() {
 
 #[test]
 fn passphrase_create_from_data() {
-    let network = 0u8;
     let entropy = Vec::from_hex(ENTROPY_OIL12).unwrap();
 
     {
         // with no passphrase
         let passphrase = None;
-        let store = SeedStoreCreator::new_from_data(&entropy, network, passphrase).unwrap();
+        let store = SeedStoreCreator::new_from_data(&entropy, None, passphrase).unwrap();
         assert_eq!(store.get_xpub().unwrap().to_string(), XPUB1);
     }
     {
         // with a passphrase
         let passphrase = Some(PASSPHRASE1);
-        let store = SeedStoreCreator::new_from_data(&entropy, network, passphrase).unwrap();
+        let store = SeedStoreCreator::new_from_data(&entropy, None, passphrase).unwrap();
         assert_eq!(store.get_xpub().unwrap().to_string(), XPUB3);
     }
 }

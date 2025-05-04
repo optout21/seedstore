@@ -17,13 +17,15 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 const NONSECRET_DATA_LEN: usize = 4;
 
-/// Store a secret BIP32-style entropy in an encrypted file
+/// Store a secret BIP32-style entropy in an encrypted file.
 /// Can be loaded from an encrypted file.
 /// Additionally store a network type byte, and 3 bytes reserved for later use.
+///
 /// The secret is stored in memory scrambled (using an ephemeral scrambling key).
-/// An seed passphrase can be used optionally, but it is not stored in the encrypted file,
-/// but has to be provided when the file is read. Internally it is stored scrambled.
-/// See also [`SeedStoreCreator`], [`KeyStore`].
+/// A seed passphrase can be used optionally, but it is not stored in the encrypted file,
+/// it has to be provided when the file is read. Internally it is stored scrambled.
+///
+/// See also [`SeedStoreCreator`], [`super::KeyStore`].
 pub struct SeedStore {
     secretstore: SecretStore,
     /// Optional seed passphrase, stored as scrambled bytes (normalized UTF).
@@ -36,7 +38,7 @@ pub struct SeedStore {
 /// See also [`SeedStore`].
 pub struct SeedStoreCreator {}
 
-/// Various ways to specify a child, e.g. by index or derivation path.
+/// Various ways to specify a child key, e.g. by index or derivation path.
 pub enum ChildSpecifier {
     /// Specify by the 4th (last, 'address_index') index (non-hardened) of the BIP84 derivation path;
     /// corresponds to "m/84'/<net>'/0'/0/<idx>"
@@ -120,16 +122,21 @@ impl SeedStore {
         )
     }
 
-    /// Accessor for network byte.
-    pub fn network(&self) -> u8 {
+    /// Accessor for network.
+    pub fn network(&self) -> Network {
+        Self::network_byte_to_enum(self.network_as_u8())
+    }
+
+    /// Accessor for network, as byte.
+    pub fn network_as_u8(&self) -> u8 {
         let nonsecret_data = self.secretstore.nonsecret_data();
         debug_assert_eq!(nonsecret_data.len(), NONSECRET_DATA_LEN);
         nonsecret_data[0]
     }
 
     /// Convert network byte to [`bitcoin::network::Network`].
-    pub fn network_byte_as_enum(&self) -> Network {
-        match self.network() {
+    pub fn network_byte_to_enum(network: u8) -> Network {
+        match network {
             0 => Network::Bitcoin,
             1 => Network::Testnet,
             2 => Network::Testnet4,
@@ -246,11 +253,8 @@ impl SeedStore {
     /// Caution: secret material is taken, processed and returned
     fn xpriv3_from_entropy(&self, entropy: &Vec<u8>) -> Result<Xpriv, String> {
         let mut seed = self.seed_from_entropy(entropy)?;
-        let xpriv = Xpriv::new_master(
-            <Network as Into<NetworkKind>>::into(self.network_byte_as_enum()),
-            &seed,
-        )
-        .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
+        let xpriv = Xpriv::new_master(<Network as Into<NetworkKind>>::into(self.network()), &seed)
+            .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
         let derivation = ChildSpecifier::default_account_derivation_path3(self.network());
         let derivation_path_3 = DerivationPath::from_str(&derivation)
             .map_err(|e| format!("Internal derivation conversion error {}", e))?;
@@ -275,11 +279,8 @@ impl SeedStore {
         derivation: &DerivationPath,
     ) -> Result<Keypair, String> {
         let mut seed = self.seed_from_entropy(entropy)?;
-        let xpriv = Xpriv::new_master(
-            <Network as Into<NetworkKind>>::into(self.network_byte_as_enum()),
-            &seed,
-        )
-        .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
+        let xpriv = Xpriv::new_master(<Network as Into<NetworkKind>>::into(self.network()), &seed)
+            .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
         let child_xpriv = xpriv
             .derive_priv(&self.secp, &derivation)
             .map_err(|e| format!("Internal XPriv derivation error {}", e))?;
@@ -295,10 +296,7 @@ impl SeedStore {
         derivation: &DerivationPath,
     ) -> Result<String, String> {
         let public_key = self.get_child_public_key_intern(entropy, derivation)?;
-        let address = Address::p2wpkh(
-            &CompressedPublicKey(public_key),
-            self.network_byte_as_enum(),
-        );
+        let address = Address::p2wpkh(&CompressedPublicKey(public_key), self.network());
         Ok(address.to_string())
     }
 
@@ -381,17 +379,19 @@ impl SeedStoreCreator {
     /// Caution: unencrypted secret data is taken.
     /// `entropy`: the BIP39-style entropy bytes, with one of these lengths:
     ///  16 (12 BIP39 mnemonic words), 20 (15 words), 24 (18 words), 28 bytes (21 words), or 32 bytes (24 words).
+    /// - network: Optionally a different bitcoin network can be specified, default is Mainnet/0 (also for None).
     /// `seed_passphrase`: Optional seed passphrase, needed to get the correct seed from the entropy (if it was used).
     pub fn new_from_data(
         entropy: &Vec<u8>,
-        network: u8,
+        network: Option<Network>,
         seed_passphrase: Option<&str>,
     ) -> Result<SeedStore, String> {
         // verify entropy length
         let _res = Self::verify_entropy_length(entropy)?;
 
         // Non-secret data: network byte, and 3 reserved bytes (reserved for later use)
-        let nonsecret_data = vec![network, 42, 43, 44];
+        let network_byte = SeedStore::network_enum_as_byte(network.unwrap_or(Network::Bitcoin));
+        let nonsecret_data = vec![network_byte, 42, 43, 44];
         debug_assert_eq!(nonsecret_data.len(), NONSECRET_DATA_LEN);
 
         let secretstore = SecretStoreCreator::new_from_data(nonsecret_data, entropy)?;
@@ -422,7 +422,7 @@ impl SeedStoreCreator {
 }
 
 impl ChildSpecifier {
-    pub fn derivation_path(&self, network: u8) -> Result<DerivationPath, String> {
+    pub fn derivation_path(&self, network: Network) -> Result<DerivationPath, String> {
         let derivation_str = match &self {
             Self::Derivation(derivation_str) => derivation_str.clone(),
             Self::ChangeAndIndex34(i3, i4) => format!(
@@ -447,9 +447,9 @@ impl ChildSpecifier {
         Ok(derivation)
     }
 
-    fn default_account_derivation_path3(network: u8) -> String {
+    fn default_account_derivation_path3(network: Network) -> String {
         match network {
-            0 => "m/84'/0'/0'".to_string(),
+            Network::Bitcoin => "m/84'/0'/0'".to_string(),
             _ => "m/84'/1'/0'".to_string(),
         }
     }
@@ -474,21 +474,22 @@ mod tests {
     use std::str::FromStr;
 
     use bitcoin::bip32::DerivationPath;
+    use bitcoin::Network;
 
     use super::ChildSpecifier;
 
     #[test]
     fn test_default_path() {
         assert_eq!(
-            ChildSpecifier::default_account_derivation_path3(0),
+            ChildSpecifier::default_account_derivation_path3(Network::Bitcoin),
             "m/84'/0'/0'"
         );
         assert_eq!(
-            ChildSpecifier::default_account_derivation_path3(1),
+            ChildSpecifier::default_account_derivation_path3(Network::Signet),
             "m/84'/1'/0'"
         );
         assert_eq!(
-            ChildSpecifier::default_account_derivation_path3(2),
+            ChildSpecifier::default_account_derivation_path3(Network::Testnet4),
             "m/84'/1'/0'"
         );
     }
@@ -497,24 +498,26 @@ mod tests {
     fn test_derivation() {
         assert_eq!(
             ChildSpecifier::Derivation("m/49'/1'/2'/3/4".to_owned())
-                .derivation_path(0)
+                .derivation_path(Network::Bitcoin)
                 .unwrap(),
             DerivationPath::from_str("m/49'/1'/2'/3/4").unwrap()
         );
         assert_eq!(
             ChildSpecifier::ChangeAndIndex34(1, 4)
-                .derivation_path(0)
+                .derivation_path(Network::Bitcoin)
                 .unwrap(),
             DerivationPath::from_str("m/84'/0'/0'/1/4").unwrap()
         );
         assert_eq!(
             ChildSpecifier::ChangeAndIndex34(1, 4)
-                .derivation_path(1)
+                .derivation_path(Network::Testnet)
                 .unwrap(),
             DerivationPath::from_str("m/84'/1'/0'/1/4").unwrap()
         );
         assert_eq!(
-            ChildSpecifier::Index4(66).derivation_path(0).unwrap(),
+            ChildSpecifier::Index4(66)
+                .derivation_path(Network::Bitcoin)
+                .unwrap(),
             DerivationPath::from_str("m/84'/0'/0'/0/66").unwrap()
         );
     }
@@ -523,7 +526,7 @@ mod tests {
     fn neg_test_invalid_derivation() {
         assert_eq!(
             ChildSpecifier::Derivation("what//deriv/j9".to_owned())
-                .derivation_path(0)
+                .derivation_path(Network::Bitcoin)
                 .err()
                 .unwrap(),
             "Derivation parsing error what//deriv/j9 invalid child number format"

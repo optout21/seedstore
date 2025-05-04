@@ -48,7 +48,7 @@ Writing out seed secret:
 ```
 use seedstore::SeedStoreCreator;
 
-    let seedstore = SeedStoreCreator::new_from_data(&entropy_bytes, 0, None)?;
+    let seedstore = SeedStoreCreator::new_from_data(&entropy_bytes, None, None)?;
     SeedStoreCreator::write_to_file(&seedstore, "./sample.secret", "PasswordVEWFVFDHHEBNJS3")?;
 }
 ```
