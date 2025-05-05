@@ -24,12 +24,6 @@ Steps to mitigate the risks:
 - Use proper encryption --- `SeedStore` helps here
 
 
-## TODO
-
-- version 1.0, with format guarantee
-- (later) breaking challenge bounty
-
-
 ## Usage -- Example usage of the code
 
 Reading secret from file:
