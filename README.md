@@ -26,7 +26,6 @@ Steps to mitigate the risks:
 
 ## TODO
 
-- encorce strong password
 - version 1.0, with format guarantee
 - (later) breaking challenge bounty
 
@@ -49,7 +48,7 @@ Writing out seed secret:
 use seedstore::SeedStoreCreator;
 
     let seedstore = SeedStoreCreator::new_from_data(&entropy_bytes, None, None)?;
-    SeedStoreCreator::write_to_file(&seedstore, "./sample.secret", "PasswordVEWFVFDHHEBNJS3")?;
+    SeedStoreCreator::write_to_file(&seedstore, "./sample.secret", "PasswordVEWFVFDHHEBNJS3", None)?;
 }
 ```
 

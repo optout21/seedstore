@@ -129,6 +129,7 @@ impl SecretStore {
         &self,
         path_for_secret_file: &str,
         encryption_password: &str,
+        allow_weak_password: Option<bool>,
     ) -> Result<(), String> {
         let file_exists = fs::exists(path_for_secret_file).map_err(|e| {
             format!(
@@ -154,7 +155,8 @@ impl SecretStore {
         })?;
 
         // Create contents
-        let encrypted_payload = self.assemble_encrypted_payload(encryption_password)?;
+        let encrypted_payload =
+            self.assemble_encrypted_payload(encryption_password, allow_weak_password)?;
 
         // Set restricted permissions
         #[cfg(feature = "unixfilepermissions")]
@@ -191,7 +193,11 @@ impl SecretStore {
         Ok(())
     }
 
-    pub fn assemble_encrypted_payload(&self, encryption_password: &str) -> Result<Vec<u8>, String> {
+    pub fn assemble_encrypted_payload(
+        &self,
+        encryption_password: &str,
+        allow_weak_password: Option<bool>,
+    ) -> Result<Vec<u8>, String> {
         let mut encrypted = self.scrambled_secret_data.clone();
         let _res = encrypt_scrambled_secret_data(
             &mut encrypted,
@@ -199,6 +205,7 @@ impl SecretStore {
             self.encryption_version,
             encryption_password,
             &self.encryption_aux_data,
+            allow_weak_password,
         )?;
         assemble_payload(
             self.format_version,
@@ -219,6 +226,13 @@ impl SecretStore {
     pub fn descramble_data(&self, scrambled_data: &mut Vec<u8>) -> Result<(), String> {
         let _res =
             xor::XorEncryptor::encrypt_with_key(scrambled_data, &self.ephemeral_scrambling_key)?;
+        Ok(())
+    }
+
+    /// Validate if an encryption password is acceptable (strong enough)
+    pub fn validate_password(encryption_password: &str) -> Result<(), String> {
+        let _res = validate_password_len(encryption_password)?;
+        let _res = validate_password_char_types(encryption_password)?;
         Ok(())
     }
 }
@@ -289,8 +303,13 @@ impl SecretStoreCreator {
         secretstore: &SecretStore,
         path_for_secret_file: &str,
         encryption_password: &str,
+        allow_weak_password: Option<bool>,
     ) -> Result<(), String> {
-        secretstore.write_to_file(path_for_secret_file, encryption_password)
+        secretstore.write_to_file(
+            path_for_secret_file,
+            encryption_password,
+            allow_weak_password,
+        )
     }
 }
 
@@ -666,7 +685,7 @@ fn scramble_encrypted_secret_data(
     Ok(())
 }
 
-fn validate_password(encryption_password: &str) -> Result<(), String> {
+fn validate_password_len(encryption_password: &str) -> Result<(), String> {
     if encryption_password.len() < PASSWORD_MIN_LEN {
         return Err(format!(
             "Password is too short! ({} vs {})",
@@ -674,6 +693,42 @@ fn validate_password(encryption_password: &str) -> Result<(), String> {
             PASSWORD_MIN_LEN
         ));
     }
+    Ok(())
+}
+
+fn validate_password_char_types(encryption_password: &str) -> Result<(), String> {
+    let mut count_lowercase_letter = 0;
+    let mut count_uppercase_letter = 0;
+    let mut count_digit = 0;
+    let mut count_other = 0;
+
+    for c in encryption_password.chars() {
+        if c >= 'a' && c <= 'z' {
+            count_lowercase_letter += 1;
+        } else if c >= 'A' && c <= 'Z' {
+            count_uppercase_letter += 1;
+        } else if c >= '0' && c <= '9' {
+            count_digit += 1;
+        } else {
+            count_other += 1;
+        }
+    }
+
+    if count_lowercase_letter < 2 {
+        return Err(format!("Password needs to contain lowercase letters"));
+    }
+    if count_uppercase_letter < 2 {
+        return Err(format!("Password needs to contain uppercase letters"));
+    }
+    if count_digit < 1 {
+        return Err(format!("Password needs to contain digits (at least one)"));
+    }
+    if count_other < 1 {
+        return Err(format!(
+            "Password needs to contain special characters (at least one)"
+        ));
+    }
+
     Ok(())
 }
 
@@ -685,8 +740,11 @@ fn encrypt_scrambled_secret_data(
     encryption_version: EncryptionVersion,
     encryption_password: &str,
     aux_data: &EncryptionAuxData,
+    allow_weak_password: Option<bool>,
 ) -> Result<(), String> {
-    let _res = validate_password(encryption_password)?;
+    if !(allow_weak_password.unwrap_or(false)) {
+        let _res = SecretStore::validate_password(encryption_password)?;
+    }
 
     // first de-scramble
     let _res = descramble_secret(scrambled, scrambling_key)?;
@@ -715,7 +773,11 @@ fn checksum_of_payload(payload: &[u8]) -> Result<Vec<u8>, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{two_bytes_from_u16, u16_from_two_bytes};
+    use super::{
+        two_bytes_from_u16, u16_from_two_bytes, validate_password_char_types, validate_password_len,
+    };
+
+    const GOOD_PASS: &str = "Hgg7+kJ$hf7kl";
 
     #[test]
     fn parse_u16() {
@@ -727,5 +789,43 @@ mod tests {
 
         let (b1, b2) = two_bytes_from_u16(0x7348);
         assert_eq!(u16_from_two_bytes(b1, b2), 0x7348)
+    }
+
+    #[test]
+    fn password_len() {
+        assert!(validate_password_len(GOOD_PASS).is_ok());
+        assert_eq!(
+            validate_password_len("SHO").err().unwrap(),
+            "Password is too short! (3 vs 7)"
+        );
+    }
+
+    #[test]
+    fn password_char_types() {
+        assert!(validate_password_char_types(GOOD_PASS).is_ok());
+        assert!(validate_password_char_types("abc").is_err());
+        assert!(validate_password_char_types("ABC").is_err());
+        assert!(validate_password_char_types("123").is_err());
+        assert!(validate_password_char_types("+-=").is_err());
+        assert!(validate_password_char_types("abAB").is_err());
+        assert!(validate_password_char_types("abAB12").is_err());
+        assert!(validate_password_char_types("abAB1+").is_ok());
+
+        assert_eq!(
+            validate_password_char_types("AB1+").err().unwrap(),
+            "Password needs to contain lowercase letters"
+        );
+        assert_eq!(
+            validate_password_char_types("ab1+").err().unwrap(),
+            "Password needs to contain uppercase letters"
+        );
+        assert_eq!(
+            validate_password_char_types("abAB+").err().unwrap(),
+            "Password needs to contain digits (at least one)"
+        );
+        assert_eq!(
+            validate_password_char_types("abAB1").err().unwrap(),
+            "Password needs to contain special characters (at least one)"
+        );
     }
 }
