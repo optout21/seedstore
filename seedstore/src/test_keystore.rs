@@ -7,6 +7,7 @@ use zeroize::Zeroize;
 
 const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
+const PASSWORD3: &str = "aA1+bB2+cC3";
 const PAYLOAD_V1_EV2_SCRYPT: &str = "535301042a2b2c2d020ef2b6285346559b45dd51fa64ecb5d4e82000adb162a64389dee81bbf1a788b0626961153c6e6edefe6aa03b07e44d2d3d727bb318d87";
 const SECRETKEY1: &str = "000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f";
 const PUBKEY1: &str = "03e93e38d9069fea998726eb25a5e9bdaadae9161ef8e63508dba807334dced88b";
@@ -84,8 +85,8 @@ fn write_to_file() {
     let store = KeyStoreCreator::new_from_data(&secret_key).unwrap();
 
     let temp_file = get_temp_file_name();
-    let password = PASSWORD1.to_owned();
-    let _res = store.write_to_file(&temp_file, &password).unwrap();
+    let password = PASSWORD3.to_owned();
+    let _res = store.write_to_file(&temp_file, &password, None).unwrap();
 
     // check the file
     let contents = fs::read(&temp_file).unwrap();

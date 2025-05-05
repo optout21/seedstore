@@ -23,6 +23,7 @@ struct Config {
     network: Option<u8>,
     program_name: String,
     test_canned_input: Vec<String>,
+    allow_weak_password: bool,
 }
 
 /// Utility tool implementation: tool to create or check an encrypted secret seed file.
@@ -38,6 +39,7 @@ impl Config {
             network: None,
             program_name: "tool".to_owned(),
             test_canned_input: Vec::new(),
+            allow_weak_password: false,
         }
     }
 }
@@ -78,7 +80,7 @@ impl SeedStoreTool {
         println!("{}:  Set or check secret seed file", progname);
         println!("");
         println!(
-            "{}  [--help] [--set] [--file <file>] [--signet] [--net <N>]",
+            "{}  [--help] [--set] [--file <file>] [--signet] [--net <N>] [--weakpw]",
             progname
         );
         println!("  --set:         If specified, mnemominc is prompted for, and secret is saved. Secret file must not exist.");
@@ -95,6 +97,7 @@ impl SeedStoreTool {
             "  --net <N>      Network byte. Default is mainnet ({})",
             DEFAULT_NETWORK
         );
+        println!("  --weakpw       Allow weak encryption password");
         println!("  --help         Print usage (this)");
         println!("");
     }
@@ -136,6 +139,8 @@ impl SeedStoreTool {
                 }
             } else if *a == "--help" {
                 config.mode = Mode::Help;
+            } else if *a == "--weakpw" {
+                config.allow_weak_password = true;
             } else {
                 return Err(format!("Unknown argument {}", a));
             }
@@ -196,6 +201,9 @@ impl SeedStoreTool {
         println!("Seedphrase entered, seems OK");
 
         let password = self.read_password()?;
+        if !self.config.allow_weak_password {
+            let _res = SeedStore::validate_password(&password)?;
+        }
 
         let passphrase = self.read_passphrase_if_needed(&password)?;
 
@@ -210,8 +218,13 @@ impl SeedStoreTool {
 
         let xpub = self.print_info(&seedstore)?;
 
-        let _res = SeedStoreCreator::write_to_file(&seedstore, &self.config.filename, &password)
-            .map_err(|e| format!("Could not write secret file, {}", e))?;
+        let _res = SeedStoreCreator::write_to_file(
+            &seedstore,
+            &self.config.filename,
+            &password,
+            Some(self.config.allow_weak_password),
+        )
+        .map_err(|e| format!("Could not write secret file, {}", e))?;
 
         println!("Seed written to encrypted file: {}", self.config.filename);
 
@@ -363,6 +376,7 @@ mod tests {
 
     const PAYLOAD_V1_EV2_SCRYPT: &str = "53530104002a2b2c020ee3d3970706fbe9f680eb68763af3c849100010907fc4f2740c7613422df300488137c1e6af59";
     const PASSWORD1: &str = "password";
+    const PASSWORD3: &str = "aA1+bB2+cC3";
     const XPUB1: &str = "xpub6CDDB17Xj7pDDWedpLsED1JbPPQmyuapHmAzQEEs2P57hciCjwQ3ov7TfGsTZftAM2gVdPzE55L6gUvHguwWjY82518zw1Z3VbDeWgx3Jqs";
     const MNEMO1: &str = "oil oil oil oil oil oil oil oil oil oil oil oil";
 
@@ -390,6 +404,7 @@ mod tests {
                 PASSWORD1.to_owned(), // repeat encryption password
                 "".to_owned(),        // passphrase
             ],
+            allow_weak_password: false,
         };
         let mut tool = SeedStoreTool::new_from_config(config);
 
@@ -412,10 +427,11 @@ mod tests {
             program_name: "tool".to_owned(),
             test_canned_input: vec![
                 MNEMO1.to_owned(),    // mnemonic
-                PASSWORD1.to_owned(), // encryption password
-                PASSWORD1.to_owned(), // repeat encryption password
+                PASSWORD3.to_owned(), // encryption password
+                PASSWORD3.to_owned(), // repeat encryption password
                 "".to_owned(),        // passphrase
             ],
+            allow_weak_password: false,
         };
         let mut tool = SeedStoreTool::new_from_config(config);
 
@@ -425,7 +441,7 @@ mod tests {
 
         // Read back the file
         {
-            let store = SeedStore::new_from_encrypted_file(&temp_file, PASSWORD1, None).unwrap();
+            let store = SeedStore::new_from_encrypted_file(&temp_file, PASSWORD3, None).unwrap();
 
             assert_eq!(store.network_as_u8(), network);
             assert_eq!(store.get_xpub().unwrap().to_string(), "tpubDCRo9GmRAvEWANJ5iSfMEqPoq3uYvjBPAAjrDj5iQMxAq7DCs5orw7m9xJes8hWYAwKuH3T63WrKfzzw7g9ucbjq4LUu5cgCLUPMN7gUkrL");
@@ -449,6 +465,7 @@ mod tests {
                 "password".to_owned(),  // encryption password
                 "passsword".to_owned(), // repeat encryption password
             ],
+            allow_weak_password: false,
         };
         let mut tool = SeedStoreTool::new_from_config(config);
 

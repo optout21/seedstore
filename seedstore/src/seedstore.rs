@@ -114,11 +114,13 @@ impl SeedStore {
         &self,
         path_for_secret_file: &str,
         encryption_password: &str,
+        allow_weak_password: Option<bool>,
     ) -> Result<(), String> {
         SecretStoreCreator::write_to_file(
             &self.secretstore,
             path_for_secret_file,
             encryption_password,
+            allow_weak_password,
         )
     }
 
@@ -361,6 +363,11 @@ impl SeedStore {
 
         Ok(signature)
     }
+
+    /// Validate if an encryption password is acceptable (strong enough)
+    pub fn validate_password(encryption_password: &str) -> Result<(), String> {
+        SecretStore::validate_password(encryption_password)
+    }
 }
 
 impl Zeroize for SeedStore {
@@ -416,8 +423,13 @@ impl SeedStoreCreator {
         seedstore: &SeedStore,
         path_for_secret_file: &str,
         encryption_password: &str,
+        allow_weak_password: Option<bool>,
     ) -> Result<(), String> {
-        seedstore.write_to_file(path_for_secret_file, encryption_password)
+        seedstore.write_to_file(
+            path_for_secret_file,
+            encryption_password,
+            allow_weak_password,
+        )
     }
 }
 

@@ -8,6 +8,7 @@ use zeroize::Zeroize;
 
 const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
+const PASSWORD3: &str = "aA1+bB2+cC3";
 const ENTROPY_OIL12: &str = "99d33a674ce99d33a674ce99d33a674c";
 const PAYLOAD_V1_EV3_CHACHA: &str =
     "53530104002a2b2c030d6a14b96b3dc98ad33c2dc35966f1d019ae236ce28b8f003388bd0c6f6d6fa18c1ff12521a46bd2e52000e8b03820e69c000daddc7dbcf76a6a0137097893246d83033a6249cd89a21e3a3f8e8626";
@@ -170,8 +171,8 @@ fn write_to_file() {
     let store = SeedStoreCreator::new_from_data(&entropy, None, None).unwrap();
 
     let temp_file = get_temp_file_name();
-    let password = PASSWORD1.to_owned();
-    let _res = store.write_to_file(&temp_file, &password).unwrap();
+    let password = PASSWORD3.to_owned();
+    let _res = store.write_to_file(&temp_file, &password, None).unwrap();
 
     // check the file
     let contents = fs::read(&temp_file).unwrap();

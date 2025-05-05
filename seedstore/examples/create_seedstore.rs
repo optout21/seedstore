@@ -12,7 +12,8 @@ fn main() -> Result<(), String> {
     let path_for_secret_file = format!("{}/sample.secret", temp_dir().to_str().unwrap());
 
     let mut seedstore = SeedStoreCreator::new_from_data(&dummy_entropy, None, None)?;
-    let _res = SeedStoreCreator::write_to_file(&seedstore, &path_for_secret_file, user_password)?;
+    let _res =
+        SeedStoreCreator::write_to_file(&seedstore, &path_for_secret_file, user_password, None)?;
     println!("Secret entropy written to file {}", path_for_secret_file);
 
     seedstore.zeroize();
