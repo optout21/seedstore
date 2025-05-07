@@ -11,7 +11,7 @@ use bitcoin::key::{Keypair, Secp256k1};
 use bitcoin::secp256k1::ecdsa::Signature;
 use bitcoin::secp256k1::{All, Message, PublicKey, SecretKey};
 use bitcoin::{Address, CompressedPublicKey, Network, NetworkKind};
-use secretstore::{SecretStore, SecretStoreCreator};
+use secretstore::{Options, SecretStore, SecretStoreCreator};
 use std::str::FromStr;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -114,7 +114,7 @@ impl SeedStore {
         &self,
         path_for_secret_file: &str,
         encryption_password: &str,
-        allow_weak_password: Option<bool>,
+        allow_weak_password: Option<Options>,
     ) -> Result<(), String> {
         SecretStoreCreator::write_to_file(
             &self.secretstore,
@@ -423,7 +423,7 @@ impl SeedStoreCreator {
         seedstore: &SeedStore,
         path_for_secret_file: &str,
         encryption_password: &str,
-        allow_weak_password: Option<bool>,
+        allow_weak_password: Option<Options>,
     ) -> Result<(), String> {
         seedstore.write_to_file(
             path_for_secret_file,

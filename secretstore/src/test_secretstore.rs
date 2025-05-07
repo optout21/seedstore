@@ -1,4 +1,4 @@
-use crate::{SecretStore, SecretStoreCreator};
+use crate::{Options, SecretStore, SecretStoreCreator};
 use hex_conservative::{DisplayHex, FromHex};
 use rand::Rng;
 use std::env::temp_dir;
@@ -278,7 +278,11 @@ fn write_to_file_weak_password() {
     let temp_file = get_temp_file_name();
     let password = PASSWORD1.to_owned();
     let _res = store
-        .write_to_file(&temp_file, &password, Some(true))
+        .write_to_file(
+            &temp_file,
+            &password,
+            Some(Options::new().allow_weak_password()),
+        )
         .unwrap();
 
     // check the file

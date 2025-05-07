@@ -22,4 +22,4 @@ mod compat_backtest;
 mod test_secretstore;
 
 // re-exports
-pub use crate::secretstore::{SecretStore, SecretStoreCreator};
+pub use crate::secretstore::{Options, SecretStore, SecretStoreCreator};

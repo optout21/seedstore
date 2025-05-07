@@ -30,3 +30,4 @@ pub use crate::keystore::{KeyStore, KeyStoreCreator};
 pub use crate::seedstore::{ChildSpecifier, SeedStore, SeedStoreCreator};
 #[cfg(feature = "toolhelper")]
 pub use crate::tool::SeedStoreTool;
+pub use secretstore::Options;
