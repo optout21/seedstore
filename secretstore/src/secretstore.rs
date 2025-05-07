@@ -51,6 +51,13 @@ enum FormatVersion {
     One = 1,
 }
 
+/// Various config options for usage, such as allow weak password.
+#[derive(Default)]
+pub struct Options {
+    /// If set, allow weak passowrd, skip password strength check.
+    allow_weak_password: bool,
+}
+
 const FORMAT_VERSION_LATEST: FormatVersion = FormatVersion::One;
 const FORMAT_VERSION_OLDEST: FormatVersion = FormatVersion::One;
 
@@ -129,7 +136,7 @@ impl SecretStore {
         &self,
         path_for_secret_file: &str,
         encryption_password: &str,
-        allow_weak_password: Option<bool>,
+        allow_weak_password: Option<Options>,
     ) -> Result<(), String> {
         let file_exists = fs::exists(path_for_secret_file).map_err(|e| {
             format!(
@@ -196,7 +203,7 @@ impl SecretStore {
     pub fn assemble_encrypted_payload(
         &self,
         encryption_password: &str,
-        allow_weak_password: Option<bool>,
+        allow_weak_password: Option<Options>,
     ) -> Result<Vec<u8>, String> {
         let mut encrypted = self.scrambled_secret_data.clone();
         let _res = encrypt_scrambled_secret_data(
@@ -205,7 +212,7 @@ impl SecretStore {
             self.encryption_version,
             encryption_password,
             &self.encryption_aux_data,
-            allow_weak_password,
+            allow_weak_password.unwrap_or_default().allow_weak_password,
         )?;
         assemble_payload(
             self.format_version,
@@ -303,7 +310,7 @@ impl SecretStoreCreator {
         secretstore: &SecretStore,
         path_for_secret_file: &str,
         encryption_password: &str,
-        allow_weak_password: Option<bool>,
+        allow_weak_password: Option<Options>,
     ) -> Result<(), String> {
         secretstore.write_to_file(
             path_for_secret_file,
@@ -319,6 +326,18 @@ impl FormatVersion {
             1 => Ok(Self::One),
             _ => Err(format!("Invalid format version {}", byte)),
         }
+    }
+}
+
+impl Options {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Allow weak password, skip passowrd strength check
+    pub fn allow_weak_password(mut self) -> Self {
+        self.allow_weak_password = true;
+        self
     }
 }
 
@@ -740,9 +759,9 @@ fn encrypt_scrambled_secret_data(
     encryption_version: EncryptionVersion,
     encryption_password: &str,
     aux_data: &EncryptionAuxData,
-    allow_weak_password: Option<bool>,
+    allow_weak_password: bool,
 ) -> Result<(), String> {
-    if !(allow_weak_password.unwrap_or(false)) {
+    if !allow_weak_password {
         let _res = SecretStore::validate_password(encryption_password)?;
     }
 

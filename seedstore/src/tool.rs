@@ -1,5 +1,5 @@
 ///! Utility tool implementation: tool to create or check an encrypted secret seed file.
-use crate::{SeedStore, SeedStoreCreator};
+use crate::{Options, SeedStore, SeedStoreCreator};
 use bip39::Mnemonic;
 use std::io::{self, stdout, BufRead, Write};
 use std::{fs, str::FromStr};
@@ -218,13 +218,14 @@ impl SeedStoreTool {
 
         let xpub = self.print_info(&seedstore)?;
 
-        let _res = SeedStoreCreator::write_to_file(
-            &seedstore,
-            &self.config.filename,
-            &password,
-            Some(self.config.allow_weak_password),
-        )
-        .map_err(|e| format!("Could not write secret file, {}", e))?;
+        let options = if self.config.allow_weak_password {
+            Some(Options::new().allow_weak_password())
+        } else {
+            None
+        };
+        let _res =
+            SeedStoreCreator::write_to_file(&seedstore, &self.config.filename, &password, options)
+                .map_err(|e| format!("Could not write secret file, {}", e))?;
 
         println!("Seed written to encrypted file: {}", self.config.filename);
 
