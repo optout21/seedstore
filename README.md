@@ -24,6 +24,13 @@ Steps to mitigate the risks:
 - Use proper encryption --- `SeedStore` helps here
 
 
+## Features Overview
+
+- Store a BIP39 entropy (or other similar secret) in a password-protected encrypted config file.
+- Treat the secret sensitively, e.g. store it scrambled in the process memory.
+- Perform basic operations like child key and address derivation, and signing, so that there is no need to propagate the secret at all to other components for basic use cases (it's possible though).
+
+
 ## Usage -- Example usage of the code
 
 Reading secret from file:
