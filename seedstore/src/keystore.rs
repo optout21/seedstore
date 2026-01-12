@@ -114,13 +114,13 @@ impl KeyStore {
         &self,
         path_for_secret_file: &str,
         encryption_password: &str,
-        allow_weak_password: Option<Options>,
+        options: Option<Options>,
     ) -> Result<(), String> {
         SecretStoreCreator::write_to_file(
             &self.secretstore,
             path_for_secret_file,
             encryption_password,
-            allow_weak_password,
+            options,
         )
     }
 
@@ -205,12 +205,12 @@ impl KeyStoreCreator {
         seedstore: &KeyStore,
         path_for_secret_file: &str,
         encryption_password: &str,
-        allow_weak_password: Option<Options>,
+        options: Option<Options>,
     ) -> Result<(), String> {
         seedstore.write_to_file(
             path_for_secret_file,
             encryption_password,
-            allow_weak_password,
+            options,
         )
     }
 }
