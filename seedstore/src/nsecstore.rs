@@ -9,7 +9,7 @@
 //! in a password-protected encrypted file.
 //! NsecStore is built on [`SecretStore`].
 
-use bech32::{encode, ToBase32};
+use bech32::{decode, encode, FromBase32, ToBase32};
 use bitcoin::key::Secp256k1;
 use bitcoin::secp256k1::ecdsa::Signature;
 use bitcoin::secp256k1::{All, Message, PublicKey, SecretKey, Signing};
@@ -189,6 +189,17 @@ impl NsecStoreCreator {
         NsecStore::new_from_secretstore(secretstore)
     }
 
+    /// Create a new store instance from given secret nsec.
+    /// The store can be written out to file using [`write_to_file`]
+    /// Caution: unencrypted secret data is taken.
+    pub fn new_from_nsec(secret_nsec: &str) -> Result<NsecStore, String> {
+        let nsec = Self::decode_nsec(secret_nsec)?;
+        let nonsecret_data = Vec::new();
+
+        let secretstore = SecretStoreCreator::new_from_data(nonsecret_data, &nsec.to_vec())?;
+        NsecStore::new_from_secretstore(secretstore)
+    }
+
     /// Write out the encrypted contents to a file.
     /// ['encryption_password']: The passowrd to be used for encryption, should be strong.
     /// Minimal length of password is checked.
@@ -199,5 +210,19 @@ impl NsecStoreCreator {
         options: Option<Options>,
     ) -> Result<(), String> {
         nsecstore.write_to_file(path_for_secret_file, encryption_password, options)
+    }
+
+    fn decode_nsec(nsec_str: &str) -> Result<[u8; 32], String> {
+        let nsec_decoded = decode(&nsec_str)
+            .map_err(|e| format!("Invalid nsec {} {}", nsec_str, e.to_string()))?;
+        if nsec_decoded.0 != "nsec" {
+            return Err(format!("Unexcpeted HRP {}", nsec_decoded.0).into());
+        }
+        let nsec = Vec::<u8>::from_base32(&nsec_decoded.1)
+            .map_err(|e| format!("Invalid bech32 {}", e.to_string()))?;
+        let nsec: [u8; 32] = nsec
+            .try_into()
+            .map_err(|_e| format!("Invalid bech32 length"))?;
+        Ok(nsec)
     }
 }

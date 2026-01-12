@@ -9,8 +9,22 @@ const PASSWORD1: &str = "password";
 const PASSWORD2: &str = "This is a different password, ain't it?";
 const PASSWORD3: &str = "aA1+bB2+cC3";
 const PAYLOAD_V1_EV2_SCRYPT: &str = "535301042a2b2c2d020ef2b6285346559b45dd51fa64ecb5d4e82000adb162a64389dee81bbf1a788b0626961153c6e6edefe6aa03b07e44d2d3d727bb318d87";
+const NSEC1: &str = "nsec1qqqsyqcyq5rqwzqfpg9scrgwpuqqzqsrqszsvpcgpy9qkrqdpc8ssqr7uq";
 const SECRETKEY1: &str = "000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f";
 const NPUB1: &str = "npub1aylr3kgxnl4fnpexavj6t6da4tdwj9s7lrnr2zxm4qrnxnwwmz9sjam98u";
+
+#[test]
+fn create_from_nsec() {
+    let mut store = NsecStoreCreator::new_from_nsec(NSEC1).unwrap();
+
+    assert_eq!(store.get_npub().unwrap().to_string(), NPUB1);
+
+    // uncomment for obtaining actual output
+    // let payload = store.secretstore.assemble_encrypted_payload(&PASSWORD1).unwrap();
+    // assert_eq!(payload.to_lower_hex_string(), "_placeholder_");
+
+    store.zeroize();
+}
 
 #[test]
 fn create_from_data() {
@@ -92,10 +106,7 @@ fn write_to_file() {
     let contents = fs::read(&temp_file).unwrap();
     // Note: cannot assert full contents, it contains dynamic fields
     assert_eq!(contents.len(), 60);
-    assert_eq!(
-        contents[0..6].to_lower_hex_string(),
-        "53530100020e"
-    );
+    assert_eq!(contents[0..6].to_lower_hex_string(), "53530100020e");
 
     let _res = fs::remove_file(&temp_file);
 }
