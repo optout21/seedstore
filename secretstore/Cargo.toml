@@ -1,6 +1,6 @@
 [package]
 name = "secretstore"
-version = "1.1.0"
+version = "1.1.1"
 description = "Store a secret (such as a private key) in an encrypted file"
 license = "MIT"
 edition = "2021"
