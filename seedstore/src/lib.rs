@@ -13,6 +13,8 @@
 //! If only a single key is needed, it it possible to use a single child key, or use [`KeyStore`] for a single key.
 
 mod keystore;
+#[cfg(feature = "nostr")]
+mod nsecstore;
 mod seedstore;
 
 #[cfg(feature = "toolhelper")]
@@ -22,11 +24,17 @@ mod tool;
 mod compat_backtest;
 #[cfg(test)]
 mod test_keystore;
+// #[cfg(and(test, feature = "nostr"))]
+#[cfg(test)]
+#[cfg(feature = "nostr")]
+mod test_nsecstore;
 #[cfg(test)]
 mod test_seedstore;
 
 // re-exports
 pub use crate::keystore::{KeyStore, KeyStoreCreator};
+#[cfg(feature = "nostr")]
+pub use crate::nsecstore::{NsecStore, NsecStoreCreator};
 pub use crate::seedstore::{ChildSpecifier, SeedStore, SeedStoreCreator};
 #[cfg(feature = "toolhelper")]
 pub use crate::tool::SeedStoreTool;

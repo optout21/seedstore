@@ -162,8 +162,7 @@ impl SecretStore {
         })?;
 
         // Create contents
-        let encrypted_payload =
-            self.assemble_encrypted_payload(encryption_password, options)?;
+        let encrypted_payload = self.assemble_encrypted_payload(encryption_password, options)?;
 
         // Set restricted permissions
         #[cfg(feature = "unixfilepermissions")]
@@ -312,11 +311,7 @@ impl SecretStoreCreator {
         encryption_password: &str,
         options: Option<Options>,
     ) -> Result<(), String> {
-        secretstore.write_to_file(
-            path_for_secret_file,
-            encryption_password,
-            options,
-        )
+        secretstore.write_to_file(path_for_secret_file, encryption_password, options)
     }
 }
 

@@ -21,6 +21,6 @@ jobs:
     - name: Build with default features
       run: cargo build --verbose
     - name: Build
-      run: cargo build --features accesssecret --features toolhelper --verbose
+      run: cargo build --features accesssecret --features nostr --features toolhelper --verbose
     - name: Run tests
-      run: cargo test --features accesssecret --features toolhelper --verbose
+      run: cargo test --features accesssecret --features nostr --features toolhelper --verbose
