@@ -136,7 +136,7 @@ impl SecretStore {
         &self,
         path_for_secret_file: &str,
         encryption_password: &str,
-        allow_weak_password: Option<Options>,
+        options: Option<Options>,
     ) -> Result<(), String> {
         let file_exists = fs::exists(path_for_secret_file).map_err(|e| {
             format!(
@@ -163,7 +163,7 @@ impl SecretStore {
 
         // Create contents
         let encrypted_payload =
-            self.assemble_encrypted_payload(encryption_password, allow_weak_password)?;
+            self.assemble_encrypted_payload(encryption_password, options)?;
 
         // Set restricted permissions
         #[cfg(feature = "unixfilepermissions")]
@@ -203,7 +203,7 @@ impl SecretStore {
     pub fn assemble_encrypted_payload(
         &self,
         encryption_password: &str,
-        allow_weak_password: Option<Options>,
+        options: Option<Options>,
     ) -> Result<Vec<u8>, String> {
         let mut encrypted = self.scrambled_secret_data.clone();
         let _res = encrypt_scrambled_secret_data(
@@ -212,7 +212,7 @@ impl SecretStore {
             self.encryption_version,
             encryption_password,
             &self.encryption_aux_data,
-            allow_weak_password.unwrap_or_default().allow_weak_password,
+            options.unwrap_or_default().allow_weak_password,
         )?;
         assemble_payload(
             self.format_version,
@@ -310,12 +310,12 @@ impl SecretStoreCreator {
         secretstore: &SecretStore,
         path_for_secret_file: &str,
         encryption_password: &str,
-        allow_weak_password: Option<Options>,
+        options: Option<Options>,
     ) -> Result<(), String> {
         secretstore.write_to_file(
             path_for_secret_file,
             encryption_password,
-            allow_weak_password,
+            options,
         )
     }
 }
