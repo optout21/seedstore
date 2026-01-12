@@ -5,38 +5,36 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>.
 // You may not use this file except in accordance with the license.
 
-//! KeyStore is a solution for storing a single bitcoin-style ECDSA private key (32 bytes)
+//! NsecStore is a solution for storing a single Nostr private key (nsec, 32 bytes)
 //! in a password-protected encrypted file.
-//! KeyStore is built on [`SecretStore`].
-//! A typical example is a wallet storing the secret seed.
-//! See also [`SeedStore`] for storing a master key (as opposed to a single key)
+//! NsecStore is built on [`SecretStore`].
 
+use bech32::{encode, ToBase32};
 use bitcoin::key::Secp256k1;
 use bitcoin::secp256k1::ecdsa::Signature;
 use bitcoin::secp256k1::{All, Message, PublicKey, SecretKey, Signing};
 use secretstore::{Options, SecretStore, SecretStoreCreator};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-const NONSECRET_DATA_LEN: usize = 4;
+const NPUB_BECH_HRP: &str = "npub";
 
-/// Store a single bitcoin-style ECDSA 32-byte private key in an encrypted file.
+/// Store a single Nostr nsec 32-byte private key in an encrypted file.
 /// The secret can be loaded from an encrypted file.
-/// Additionally store 4 bytes of non-secret data, reserved for later use.
 ///
 /// The secret is stored in memory scrambled (using an ephemeral scrambling key).
-/// See also [`KeyStoreCreator`], [`super::SeedStore`].
-pub struct KeyStore {
+/// See also [`NsecStoreCreator`], [`super::SeedStore`].
+pub struct NsecStore {
     secretstore: SecretStore,
-    public_key: PublicKey,
+    npub: String,
     secp: Secp256k1<All>,
 }
 
 /// Helper class for creating the store from given data.
 /// Should be used only by the utility that creates the encrypted file.
-/// See also [`KeyStore`].
-pub struct KeyStoreCreator {}
+/// See also [`NsecStore`].
+pub struct NsecStoreCreator {}
 
-impl KeyStore {
+impl NsecStore {
     /// Load the secret from a password-protected secret file.
     pub fn new_from_encrypted_file(
         path_for_secret_file: &str,
@@ -58,47 +56,42 @@ impl KeyStore {
     }
 
     fn new_from_secretstore(secretstore: SecretStore) -> Result<Self, String> {
-        let nonsecret_data = secretstore.nonsecret_data();
-        if nonsecret_data.len() != NONSECRET_DATA_LEN {
-            return Err(format!(
-                "Nonsecret data len should be {} (was {})",
-                NONSECRET_DATA_LEN,
-                nonsecret_data.len()
-            ));
-        }
-        debug_assert_eq!(nonsecret_data.len(), NONSECRET_DATA_LEN);
         let secp = Secp256k1::new();
-        let public_key = Self::get_public_key_intern(&secretstore, &secp)?;
+        let npub = Self::get_npub_intern(&secretstore, &secp)?;
 
-        Ok(KeyStore {
+        Ok(NsecStore {
             secretstore,
-            public_key,
+            npub,
             secp,
         })
     }
 
-    fn get_public_key_intern<C: Signing>(
+    fn get_npub_intern<C: Signing>(
         secret_store: &SecretStore,
         secp: &Secp256k1<C>,
-    ) -> Result<PublicKey, String> {
-        let public_key = secret_store.processed_secret_data(|secret| {
-            Self::get_public_key_from_secret_intern(secret, &secp)
-        })?;
-        Ok(public_key)
+    ) -> Result<String, String> {
+        let npub = secret_store
+            .processed_secret_data(|secret| Self::get_npub_from_secret_intern(secret, &secp))?;
+        Ok(npub)
     }
 
     /// Caution: secret data is processed internally.
-    fn get_public_key_from_secret_intern<C: Signing>(
+    fn get_npub_from_secret_intern<C: Signing>(
         secret: &Vec<u8>,
         secp: &Secp256k1<C>,
-    ) -> Result<PublicKey, String> {
+    ) -> Result<String, String> {
         let private_key = SecretKey::from_slice(secret)
             .map_err(|e| format!("Secret key conversion error {}", e))?;
-        let public_key = private_key.public_key(&secp);
+        let public_key = private_key.x_only_public_key(&secp).0.serialize();
 
-        let _ = private_key;
+        let npub = encode(
+            NPUB_BECH_HRP,
+            public_key.to_base32(),
+            bech32::Variant::Bech32,
+        )
+        .map_err(|e| e.to_string())?;
 
-        Ok(public_key)
+        Ok(npub)
     }
 
     /// Caution: secret data is returned in copy
@@ -124,9 +117,9 @@ impl KeyStore {
         )
     }
 
-    /// Return the corresponding public key, generated from the secret private key.
-    pub fn get_public_key(&self) -> Result<PublicKey, String> {
-        Ok(self.public_key)
+    /// Return the corresponding npub, generated from the secret nsec.
+    pub fn get_npub(&self) -> Result<&str, String> {
+        Ok(&self.npub)
     }
 
     /// Return the PRIVATE key.
@@ -144,6 +137,8 @@ impl KeyStore {
         })?;
         Ok(private_key)
     }
+
+    // TODO Change to schnorr!
 
     /// Sign using the private key. Use ECDSA signature as it is used in bitcoin.
     /// A 32-byte digest (hash) is signed.
@@ -168,45 +163,41 @@ impl KeyStore {
             .map_err(|e| format!("Hash digest processing error {}", e.to_string()))?;
         let signature = self.secp.sign_ecdsa(&msg, &private_key);
 
-        let _ = private_key;
-
         Ok(signature)
     }
 }
 
-impl Zeroize for KeyStore {
+impl Zeroize for NsecStore {
     fn zeroize(&mut self) {
         self.secretstore.zeroize();
-        let _ = self.public_key;
+        let _ = self.npub;
         self.secp = Secp256k1::new();
     }
 }
 
-impl ZeroizeOnDrop for KeyStore {}
+impl ZeroizeOnDrop for NsecStore {}
 
-impl KeyStoreCreator {
+impl NsecStoreCreator {
     /// Create a new store instance from given secret private key bytes.
     /// The store can be written out to file using [`write_to_file`]
     /// Caution: unencrypted secret data is taken.
-    pub fn new_from_data(secret_private_key_bytes: &[u8; 32]) -> Result<KeyStore, String> {
-        // Non-secret data: network byte, and 3 reserved bytes (reserved for later use)
-        let nonsecret_data = vec![42, 43, 44, 45];
-        debug_assert_eq!(nonsecret_data.len(), NONSECRET_DATA_LEN);
+    pub fn new_from_data(secret_private_key_bytes: &[u8; 32]) -> Result<NsecStore, String> {
+        let nonsecret_data = Vec::new();
 
         let secretstore =
             SecretStoreCreator::new_from_data(nonsecret_data, &secret_private_key_bytes.to_vec())?;
-        KeyStore::new_from_secretstore(secretstore)
+        NsecStore::new_from_secretstore(secretstore)
     }
 
     /// Write out the encrypted contents to a file.
     /// ['encryption_password']: The passowrd to be used for encryption, should be strong.
     /// Minimal length of password is checked.
     pub fn write_to_file(
-        keystore: &KeyStore,
+        nsecstore: &NsecStore,
         path_for_secret_file: &str,
         encryption_password: &str,
         options: Option<Options>,
     ) -> Result<(), String> {
-        keystore.write_to_file(path_for_secret_file, encryption_password, options)
+        nsecstore.write_to_file(path_for_secret_file, encryption_password, options)
     }
 }

@@ -425,11 +425,7 @@ impl SeedStoreCreator {
         encryption_password: &str,
         options: Option<Options>,
     ) -> Result<(), String> {
-        seedstore.write_to_file(
-            path_for_secret_file,
-            encryption_password,
-            options,
-        )
+        seedstore.write_to_file(path_for_secret_file, encryption_password, options)
     }
 }
 

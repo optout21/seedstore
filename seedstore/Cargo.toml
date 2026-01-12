@@ -9,10 +9,13 @@ edition = "2021"
 default = []
 # Allow direct access to secret material
 accesssecret = []
+# Nostr/nsec store
+nostr = ["bech32"]
 # Helpers for seedstore-tool
 toolhelper = ["rpassword"]
 
 [dependencies]
+bech32 = { version = "0.9", optional = true }
 bip39 = { version = "2.1.0", features = ["zeroize"] }
 bitcoin = "0.32.5"
 rpassword = { version = "7.4.0", optional = true }
